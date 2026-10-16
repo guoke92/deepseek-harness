@@ -1,0 +1,26 @@
+/* Chart card: the code-block surface and radius, so a chart and its source
+   fallback occupy the same space in the transcript. */
+
+.frame {
+  position: relative;
+}
+
+/* Keeps the host at the frame's full width while the chart is drawn, without
+   occupying space or showing a partial chart beside the fallback. */
+.measuring {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  visibility: hidden;
+}
+
+.chart {
+  margin: 16px 0;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  background: var(--dsw-alias-markdown-code-block);
+  border-radius: var(--dsw-radius-lg);
+}

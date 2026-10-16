@@ -1,0 +1,32 @@
+# @local/analyst: the「数据分析」preset. Query tools register only inside this
+# preset. datasource and wiki stay host services the preset injects.
+- insert:
+    - id: preset-analyst
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: analyst
+        name: 数据分析
+        description: 基于 wiki 口径与只读 SQL 回答数据问题，输出结论、表格与可核对的出处。
+        order: 5
+        plugins:
+          - id: analyst-query
+            name: '@local/analyst'
+            # localAnalyst 只在本预设内可见。预设里提供的服务必须隔离，否则整份预设拒绝挂载。
+            isolate:
+              localAnalyst: true
+            config: {}
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是数据分析助手。回答问数问题时遵循：
+                1. 先用 wiki_search 查找相关口径，必要时 wiki_read_page 读取页面。没有页面时改读 wiki_list_materials 与 wiki_get_material，并说明口径尚未编译。草稿口径可以使用，但必须标注「草稿口径，未审核」。
+                2. 需要出处原文时用 wiki_get_material。结构不清楚时用 datasource_list。
+                3. 只用 analyst_execute_readonly 执行单条只读 SELECT，并给出 referencedFields（table.column）。不要绕过字面值校验。
+                4. 输出：先一句结论，再 markdown 表格。策略允许时再给一个 vega-lite 代码块。最后注明数据源 id、执行的 SQL，以及引用的页面 slug 或原料 id。
+                5. 用户用「确认口径：……」确认一句话，或只说「确认口径」确认刚才执行成功的 SQL。不要自己调用沉淀工具。
+              complete: false
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'

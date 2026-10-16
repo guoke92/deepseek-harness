@@ -1,0 +1,6 @@
+# @local/wiki: materials plus pages, links, versions and proposals. Inserted after
+# the base layer so storage-domain exists. Collect calls localDatasource when present.
+- insert:
+    - id: local-wiki
+      name: '@local/wiki'
+      config: {}

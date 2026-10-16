@@ -24,6 +24,8 @@ import type {} from 'mdast-util-math'
 import { normalizeUri } from 'micromark-util-sanitize-uri'
 import type { CodeToolbarLabels } from '../CodeToolbar.tsx'
 import { CodeBlock } from './CodeBlock.tsx'
+import { MermaidBlock } from './MermaidBlock.tsx'
+import { VegaLiteBlock } from './VegaLiteBlock.tsx'
 import { parseFileLink } from './file-link.ts'
 import { renderTexToReact } from './katex.tsx'
 import { LinkIconMedium, classifyLinkPath } from '../LinkIcon.tsx'
@@ -390,7 +392,7 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
     // its text extraction saw the code block's trailing newline.
     return <Fragment key={key}>{renderTexToReact(`${node.value}\n`, true)}</Fragment>
   }
-  return (
+  const codeBlock = (
     <CodeBlock
       key={key}
       // The replaced hast pipeline appended one synthetic newline that
@@ -409,6 +411,15 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
       toolbarLabels={context.labels.code.toolbarLabels}
     />
   )
+  // Mermaid and Vega-Lite fences draw once settled, like ```math; the source
+  // code block stays while the message streams and as the fallback.
+  if (!context.streaming && lang === 'mermaid') {
+    return <MermaidBlock key={key} source={node.value} fallback={codeBlock} />
+  }
+  if (!context.streaming && lang === 'vega-lite') {
+    return <VegaLiteBlock key={key} source={node.value} fallback={codeBlock} />
+  }
+  return codeBlock
 }
 
 /** A list is loose when it or any of its items is spread; every item then keeps its paragraphs. */

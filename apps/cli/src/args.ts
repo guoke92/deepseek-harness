@@ -27,6 +27,8 @@ interface ProfileInvocation {
   patches: string[]
   /** Everything after the launcher's own flags, verbatim, for injected app plugins. */
   args: string[]
+  /** `dsh web restart` consumed the leading `restart` token and should stop the previous server. */
+  restart?: true
 }
 
 /** Print a composed profile tree and exit without booting. */
@@ -114,7 +116,15 @@ function resolveBoot(program: Command, profile: string, options: BootOptions, ar
   if (options.fromDefaultProfile === '') program.error('error: --from-default-profile needs a name')
   const dumps = [options.dumpConfig, options.dumpDefaultConfig, options.dumpConfigSchema].filter(Boolean)
   if (dumps.length === 0) {
-    return { mode: 'profile', profile, fromDefaultProfile: options.fromDefaultProfile, patches, args }
+    const restart = profile === 'web' && args[0] === 'restart'
+    return {
+      mode: 'profile',
+      profile,
+      fromDefaultProfile: options.fromDefaultProfile,
+      patches,
+      args: restart ? args.slice(1) : args,
+      ...(restart ? { restart: true as const } : {}),
+    }
   }
   if (dumps.length > 1) {
     program.error('error: --dump-config, --dump-default-config, and --dump-config-schema are mutually exclusive')

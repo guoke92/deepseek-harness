@@ -1,0 +1,38 @@
+{
+  "name": "@local/wiki",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "数据分析的 wiki：原料只追加、从数据源采集入库、页面、链接、版本与提议。",
+  "exports": {
+    ".": "./src/entry-v2.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "src/**/*.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "scripts/**/*.mjs"
+  ],
+  "dependencies": {
+    "@local/contracts": "file:../contracts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar", "@deepseek-ai/dsh-api-remotes", "@deepseek-ai/dsh-client-ui-session"]
+    }
+  }
+}

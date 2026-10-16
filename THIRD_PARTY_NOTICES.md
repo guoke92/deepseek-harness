@@ -102,6 +102,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`mdast-util-from-markdown`](https://github.com/syntax-tree/mdast-util-from-markdown) | MIT |
 | [`mdast-util-gfm`](https://github.com/syntax-tree/mdast-util-gfm) | MIT |
 | [`mdast-util-math`](https://github.com/syntax-tree/mdast-util-math) | MIT |
+| [`mermaid`](https://github.com/mermaid-js/mermaid) | MIT |
 | [`micromark-core-commonmark`](https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark) | MIT |
 | [`micromark-extension-gfm`](https://github.com/micromark/micromark-extension-gfm) | MIT |
 | [`micromark-extension-math`](https://github.com/micromark/micromark-extension-math) | MIT |
@@ -137,6 +138,8 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`typescript`](https://github.com/microsoft/TypeScript) | Apache-2.0 |
 | [`undici`](https://github.com/nodejs/undici) | MIT |
 | [`use-sync-external-store`](https://github.com/facebook/react) | MIT |
+| [`vega-embed`](http://github.com/vega/vega-embed) | BSD-3-Clause |
+| [`vega-interpreter`](https://github.com/vega/vega) | BSD-3-Clause |
 | [`ws`](https://github.com/websockets/ws) | MIT |
 | [`xlsx`](https://git.sheetjs.com/SheetJS/sheetjs) | Apache-2.0 |
 | [`yaml`](https://github.com/eemeli/yaml) | ISC |
@@ -246,7 +249,6 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`jsdom`](https://github.com/jsdom/jsdom) | MIT |
 | [`lefthook`](https://github.com/evilmartians/lefthook) | MIT |
 | [`lightningcss`](https://github.com/parcel-bundler/lightningcss) | MPL-2.0 |
-| [`mermaid`](https://github.com/mermaid-js/mermaid) | MIT |
 | [`micromark-util-types`](https://github.com/micromark/micromark/tree/main/packages/micromark-util-types) | MIT |
 | [`oxlint`](https://github.com/oxc-project/oxc) | MIT |
 | [`oxlint-tsgolint`](https://github.com/oxc-project/tsgolint) | MIT |
@@ -258,6 +260,8 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`spdx-expression-parse`](https://github.com/jslicense/spdx-expression-parse.js) | MIT |
 | [`tsdown`](https://github.com/rolldown/tsdown) | MIT |
 | [`typescript-language-server`](https://github.com/typescript-language-server/typescript-language-server) | Apache-2.0 |
+| [`vega`](https://github.com/vega/vega) | BSD-3-Clause |
+| [`vega-lite`](https://github.com/vega/vega-lite) | BSD-3-Clause |
 | [`vite`](https://github.com/vitejs/vite) | MIT |
 | [`vite-tsconfig-paths`](https://github.com/aleclarson/vite-tsconfig-paths) | MIT |
 | [`vitepress`](https://github.com/vuejs/vitepress) | MIT |

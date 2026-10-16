@@ -1,0 +1,21 @@
+{
+  "meta": { "title": "长期记忆", "description": "按工作空间保存的长期记忆：明确记住、按问题召回，并提供记忆工具。" },
+  "nav": "长期记忆",
+  "intro": "已生效的偏好会进入之后的会话。待确认的条目不会进入提示词",
+  "empty": "还没有记忆",
+  "kind": "种类",
+  "content": "内容",
+  "add": "新增",
+  "confirm": "确认",
+  "reject": "拒绝",
+  "remove": "删除",
+  "refresh": "刷新",
+  "pending": "待确认",
+  "active": "已生效",
+  "needSession": "先打开一个会话，再管理记忆",
+  "profile": "画像",
+  "preference": "偏好",
+  "interest": "兴趣",
+  "fact": "事实",
+  "task": "任务"
+}

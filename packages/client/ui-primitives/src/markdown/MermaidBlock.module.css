@@ -1,0 +1,16 @@
+/* Diagram card: the code-block surface and radius, so a diagram and the
+   source fallback occupy the same space in the transcript. */
+
+.diagram {
+  margin: 16px 0;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  background: var(--dsw-alias-markdown-code-block);
+  border-radius: var(--dsw-radius-lg);
+}
+
+.diagram:not(:last-child) {
+  margin-bottom: 11px;
+}

@@ -155,6 +155,21 @@ describe('parseDshArgs', () => {
     expect(exitCode(argv, true)).toBe(1)
   })
 
+  it('routes `dsh web restart` as a web profile boot with the restart marker', () => {
+    expect(parse(['web', 'restart']))
+      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: [], restart: true })
+    expect(parse(['web', 'restart', '--port', '8080', '--no-open']))
+      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['--port', '8080', '--no-open'], restart: true })
+    // Launcher options are parsed before the leading app argument; app flags
+    // after `restart` stay pass-through args for the web app, as before.
+    expect(parse(['web', 'restart', '--patch', 'x.yml']))
+      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['--patch', 'x.yml'], restart: true })
+    expect(parse(['web', '--patch', 'x.yml', 'restart']))
+      .toEqual({ mode: 'profile', profile: 'web', patches: ['x.yml'], args: [], restart: true })
+    expect(parse(['web', 'restart', '--dump-config']))
+      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['--dump-config'], restart: true })
+  })
+
   it('routes profile and web config dumps', () => {
     expect(parse(['--profile', 'web', '--dump-config']))
       .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })

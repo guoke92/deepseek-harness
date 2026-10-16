@@ -1,0 +1,21 @@
+{
+  "meta": { "title": "Memory", "description": "Long-term memory for the current profile: explicit remember, question recall, and memory tools." },
+  "nav": "Memory",
+  "intro": "Active preferences are included in later sessions. Pending items stay out of the prompt",
+  "empty": "No memories yet",
+  "kind": "Kind",
+  "content": "Content",
+  "add": "Add",
+  "confirm": "Confirm",
+  "reject": "Reject",
+  "remove": "Delete",
+  "refresh": "Refresh",
+  "pending": "Pending",
+  "active": "Active",
+  "needSession": "Open a session before changing memory",
+  "profile": "Profile",
+  "preference": "Preference",
+  "interest": "Interest",
+  "fact": "Fact",
+  "task": "Task"
+}
