@@ -5,33 +5,54 @@ import { randomBytes } from 'node:crypto'
 import { createSerialQueue } from './queue.js'
 import { createWikiStore } from './store.js'
 import { createMaterialStore } from './materials-store.js'
-import { applyDecision, promoteDraft, revertTo } from './apply.js'
+import { applyDecision, applyDecisions, promoteDraft, revertTo } from './apply.js'
 import { graphOverview, graphExpand, deadLinks } from './links.js'
 import { runDecisionBatch } from './pipeline.js'
+import { compilerFor } from './compilers.js'
+import './db-compiler.js'
 
 const TABLE_REF = /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+){0,2}$/
 
 /**
- * 采集使用的表。显式非空列表优先，否则用该知识库绑定上保存的范围。
+ * 采集使用的表。显式非空列表优先，其次是知识库自己的范围，再次是数据源默认范围。
+ * 都没有时返回 null，表示采集连接默认库的全部表。
  * @param {{scopes?: Record<string, {tables?: string[]}>}|null|undefined} base
  * @param {number|string} datasourceId
  * @param {string[]|null|undefined} override
+ * @param {string[]|null|undefined} [fallback]
  * @returns {string[]|null}
  */
-export function collectTables(base, datasourceId, override) {
+export function collectTables(base, datasourceId, override, fallback) {
   if (Array.isArray(override) && override.length > 0) return override
   const scoped = base?.scopes?.[String(Number(datasourceId))]?.tables
-  return scoped?.length ? scoped : null
+  if (scoped?.length) return scoped
+  return Array.isArray(fallback) && fallback.length > 0 ? fallback : null
 }
 
 /** 把 storage domain 的 table 包成 store 需要的 get/put/entries/size 形状。 */
+
+const COLLECT_STATES = new Set(['done', 'failed', 'cancelled'])
+
+function normalizeCollects(value) {
+  if (!value || typeof value !== 'object') return {}
+  const out = {}
+  for (const [key, row] of Object.entries(value)) {
+    if (!/^\d+$/.test(key) || !COLLECT_STATES.has(row?.state)) continue
+    out[key] = {
+      state: row.state,
+      error: typeof row.error === 'string' && row.error ? row.error.slice(0, 300) : null,
+      finishedAt: typeof row.finishedAt === 'string' ? row.finishedAt : null,
+    }
+  }
+  return out
+}
 
 function normalizeScopes(value) {
   if (!value || typeof value !== 'object') return {}
   const out = {}
   for (const [key, scope] of Object.entries(value)) {
     if (!/^\d+$/.test(key)) continue
-    const tables = [...new Set((scope?.tables ?? []).map(String))].filter((table) => TABLE_REF.test(table)).slice(0, 400)
+    const tables = [...new Set((scope?.tables ?? []).map(String))].filter((table) => TABLE_REF.test(table))
     if (tables.length > 0) out[key] = { tables }
   }
   return out
@@ -62,6 +83,7 @@ function materialAdapter(table) {
       await table.put(String(id), next)
       return next
     },
+    delete: (id) => table.delete(String(id)),
   }
 }
 
@@ -82,6 +104,9 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
   const env = { pages: store.pages, proposals: store.proposals, revisions: store.revisions, log: store.log, now }
   const scoped = (rows, knowledgeBaseId) => knowledgeBaseId ? rows.filter((row) => row.knowledgeBaseId === knowledgeBaseId) : rows
   const listBases = () => basesTable.entries().map(([, value]) => value).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+  const ownFlag = (input, current, key) => (
+    input != null && Object.prototype.hasOwnProperty.call(input, key) ? input[key] === true : current?.[key] === true
+  )
   async function putBase(input, current) {
     const name = String(input?.name ?? current?.name ?? '').trim()
     if (!name || name.length > 80) throw new Error('name is required')
@@ -90,6 +115,7 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
     const datasourceIds = [...new Set((input?.datasourceIds ?? current?.datasourceIds ?? []).map(Number))]
       .filter((id) => Number.isInteger(id) && id > 0)
     const scopes = normalizeScopes(input?.scopes ?? current?.scopes ?? {})
+    const collects = normalizeCollects(input?.collects ?? current?.collects ?? {})
     const at = now()
     const record = {
       schemaVersion: 1,
@@ -98,11 +124,30 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       description,
       datasourceIds,
       scopes,
+      collects,
       createdAt: current?.createdAt ?? at,
       updatedAt: at,
+      ...(ownFlag(input, current, 'isDefault') ? { isDefault: true } : {}),
+      ...(ownFlag(input, current, 'focused') ? { focused: true } : {}),
     }
     await basesTable.put(record.id, record)
     return record
+  }
+  async function replaceFlag(id, key) {
+    const all = listBases()
+    const current = all.find((item) => item.id === id)
+    if (!current) throw new Error(`knowledge base ${id} not found`)
+    let chosen = current
+    for (const base of all) {
+      const next = base.id === id
+      if ((base[key] === true) === next) {
+        if (next) chosen = base
+        continue
+      }
+      const saved = await putBase({ [key]: next }, base)
+      if (next) chosen = saved
+    }
+    return chosen
   }
   return {
     store,
@@ -136,30 +181,79 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       return queue.run(async () => runDecisionBatch(batch, { ...opts, env }))
     },
     /**
-     * 编译全部 captured 原料。decide 在队列内调用，本身不要再进入本队列。
-     * @param {(batch: object[], context: object) => Promise<object[]>} decide
+     * 按来源类型编译 captured 与 failed 原料。
+     * 已注册且 supports 的原料生成页面；其余保持原状态。
+     * @param {{knowledgeBaseId?: string, signal?: AbortSignal, onItem?: Function}} [opts]
      */
-    async compile(decide, { knowledgeBaseId } = {}) {
+    async compile({ knowledgeBaseId, signal, onItem } = {}) {
       const belongs = (item) => !knowledgeBaseId || item.knowledgeBaseId === knowledgeBaseId
-      const failed = materials.list().filter((item) => item.status === 'failed' && belongs(item))
-      for (const item of failed) await materials.transition(item.id, 'captured')
-      const captured = materials.list().filter((item) => item.status === 'captured' && belongs(item))
-      const outline = scoped(store.pages.list(), knowledgeBaseId)
-        .filter((page) => page.status !== 'archived')
-        .map((page) => `- [[${page.slug}]] ${page.title}（${page.pageType}，${page.status}，v${page.version}）`)
-        .join('\n')
-      return queue.run(async () => runDecisionBatch(captured, {
-        decide,
-        context: () => ({ outline }),
-        materials,
-        env: knowledgeBaseId ? { ...env, knowledgeBaseId } : env,
-      }))
+      return queue.run(async () => {
+        const runnable = []
+        for (const item of materials.list()) {
+          if (!belongs(item) || (item.status !== 'captured' && item.status !== 'failed')) continue
+          const compiler = compilerFor(item.sourceType)
+          if (!compiler?.supports(item)) continue
+          if (item.status === 'failed') await materials.transition(item.id, 'captured')
+          runnable.push(item.id)
+        }
+        const outcomes = []
+        let decided = 0
+        let failed = 0
+        const batchEnv = knowledgeBaseId ? { ...env, knowledgeBaseId } : env
+        for (let index = 0; index < runnable.length; index++) {
+          if (signal?.aborted) throw cancelledError()
+          const material = materials.get(runnable[index])
+          if (onItem) await onItem(material, index, runnable.length)
+          const compiler = compilerFor(material.sourceType)
+          let decisions
+          try {
+            decisions = compiler.compile(material, {
+              hasPage: (slug) => Boolean(store.pages.get(slug, knowledgeBaseId)),
+              hasOpenProposal: (slug) => store.proposals.list().some((item) => (
+                item.slug === slug && item.status === 'open' && item.kind === 'review'
+                && (!knowledgeBaseId || item.knowledgeBaseId === knowledgeBaseId)
+              )),
+            })
+          } catch (err) {
+            const reason = String(err?.message ?? err)
+            await materials.transition(material.id, 'failed', { failureReason: reason })
+            failed++
+            outcomes.push({ materialId: material.id, outcome: 'failed', reason })
+            continue
+          }
+          if (!decisions?.length) {
+            const reason = 'compiler returned no decisions'
+            await materials.transition(material.id, 'failed', { failureReason: reason })
+            failed++
+            outcomes.push({ materialId: material.id, outcome: 'failed', reason })
+            continue
+          }
+          const stamped = decisions.map((decision) => ({
+            ...decision,
+            evidenceRefs: decision.evidenceRefs?.length ? decision.evidenceRefs : [material.id],
+          }))
+          const batch = applyDecisions(stamped, { ...batchEnv, decisionId: `dec_${material.id}`, source: 'pipeline' })
+          if (batch.rejected) {
+            await materials.transition(material.id, 'failed', { failureReason: batch.rejected.reason })
+            failed++
+            outcomes.push({ materialId: material.id, outcome: 'failed', reason: batch.rejected.reason, applied: batch.applied })
+            continue
+          }
+          await materials.transition(material.id, 'decided', { decisionId: `dec_${material.id}` })
+          decided++
+          outcomes.push({ materialId: material.id, outcome: 'decided', applied: batch.applied })
+        }
+        const skipped = materials.list().filter((item) => belongs(item) && item.status === 'captured').length
+        return { decided, failed, skipped, outcomes }
+      })
     },
-    promote(slug) {
-      return queue.run(async () => promoteDraft(slug, env))
+    promote(slug, knowledgeBaseId) {
+      const bound = knowledgeBaseId ? { ...env, knowledgeBaseId } : env
+      return queue.run(async () => promoteDraft(slug, bound))
     },
-    revert(slug, version) {
-      return queue.run(async () => revertTo(slug, version, env))
+    revert(slug, version, knowledgeBaseId) {
+      const bound = knowledgeBaseId ? { ...env, knowledgeBaseId } : env
+      return queue.run(async () => revertTo(slug, version, bound))
     },
     /** 删除提议：接受则只标记状态，页面删除由人工单独操作（这里不直接删页）。 */
     resolveProposal(id, status) {
@@ -167,22 +261,36 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
         if (!['accepted', 'rejected'].includes(status)) throw new Error('status must be accepted or rejected')
         const cur = store.proposals.get(id)
         if (!cur) throw new Error(`proposal ${id} not found`)
+        if (status === 'accepted' && cur.kind === 'review' && cur.publish) {
+          const exists = Boolean(store.pages.get(cur.publish.slug, cur.knowledgeBaseId))
+          const result = applyDecision({
+            ...cur.publish,
+            action: exists ? 'update' : (cur.publish.action || 'new'),
+          }, { ...env, knowledgeBaseId: cur.knowledgeBaseId, decisionId: cur.decisionId, source: 'user' })
+          if (result.outcome === 'rejected') throw new Error(result.reason || 'review could not be published')
+        }
         store.proposals.set(id, { status })
         return store.proposals.get(id)
       })
     },
     pages: (knowledgeBaseId) => scoped(store.pages.list(), knowledgeBaseId),
-    page: (slug) => store.pages.get(slug),
+    page: (slug, knowledgeBaseId) => store.pages.get(slug, knowledgeBaseId) ?? null,
     proposals: (knowledgeBaseId) => scoped(store.proposals.list(), knowledgeBaseId),
     listMaterials: (knowledgeBaseId) => scoped(materials.list(), knowledgeBaseId),
+    removeMaterial: (id) => materials.remove(id),
+    async clearMaterials(knowledgeBaseId) {
+      const ids = scoped(materials.list(), knowledgeBaseId).map((item) => item.id)
+      for (const id of ids) await materials.remove(id)
+      return { removed: ids.length }
+    },
     revisions: (slug) => store.revisions.list(slug),
     outline: (knowledgeBaseId) => scoped(store.pages.list(), knowledgeBaseId)
       .filter((p) => p.status !== 'archived')
       .map((p) => `- [[${p.slug}]] ${p.title}（${p.pageType}，${p.status}，v${p.version}）`)
       .join('\n'),
-    search(query, { limit = 8, includeDrafts = true } = {}) {
+    search(query, { limit = 8, includeDrafts = true, knowledgeBaseId } = {}) {
       const terms = String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean)
-      const hits = store.pages.list().map((p) => {
+      const hits = scoped(store.pages.list(), knowledgeBaseId).map((p) => {
         const text = `${p.title}\n${p.published?.body ?? ''}\n${includeDrafts ? (p.draft?.body ?? '') : ''}`.toLowerCase()
         const score = terms.reduce((n, t) => n + (text.includes(t) ? 1 : 0), 0)
         return { slug: p.slug, title: p.title, status: p.status, score }
@@ -195,7 +303,13 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
     bases: {
       list: listBases,
       get: (id) => basesTable.get(id),
-      create: (input) => queue.run(() => putBase(input)),
+      create: (input) => queue.run(async () => {
+        const existing = listBases()
+        const flags = {}
+        if (!existing.some((item) => item.isDefault === true)) flags.isDefault = true
+        if (!existing.some((item) => item.focused === true)) flags.focused = true
+        return putBase({ ...flags, ...input })
+      }),
       update: (id, patch) => queue.run(async () => {
         const current = basesTable.get(id)
         if (!current) throw new Error(`knowledge base ${id} not found`)
@@ -220,8 +334,10 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
         if (!current) throw new Error(`knowledge base ${id} not found`)
         const nextId = Number(datasourceId)
         const scopes = { ...(current.scopes ?? {}) }
+        const collects = { ...(current.collects ?? {}) }
         delete scopes[String(nextId)]
-        return putBase({ datasourceIds: current.datasourceIds.filter((item) => item !== nextId), scopes }, current)
+        delete collects[String(nextId)]
+        return putBase({ datasourceIds: current.datasourceIds.filter((item) => item !== nextId), scopes, collects }, current)
       }),
       setScope: (id, datasourceId, tables) => queue.run(async () => {
         const current = basesTable.get(id)
@@ -233,6 +349,21 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
         if (next[String(nextId)]) scopes[String(nextId)] = next[String(nextId)]
         else delete scopes[String(nextId)]
         return putBase({ scopes }, current)
+      }),
+      setDefault: (id) => queue.run(() => replaceFlag(id, 'isDefault')),
+      setFocus: (id) => queue.run(() => replaceFlag(id, 'focused')),
+      noteCollect: (id, datasourceId, status) => queue.run(async () => {
+        const current = basesTable.get(id)
+        if (!current) throw new Error(`knowledge base ${id} not found`)
+        const nextId = Number(datasourceId)
+        if (!current.datasourceIds.includes(nextId)) throw new Error('datasource is not bound to this knowledge base')
+        const collects = { ...(current.collects ?? {}) }
+        collects[String(nextId)] = {
+          state: status.state,
+          error: status.error ?? null,
+          finishedAt: now(),
+        }
+        return putBase({ collects }, current)
       }),
     },
     requireBound(knowledgeBaseId, datasourceId) {
@@ -249,9 +380,8 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
         if (!found) throw new Error(`knowledge base ${knowledgeBaseId} not found`)
         return found
       }
-      if (all.length === 1) return all[0]
       if (all.length === 0) throw new Error('create a knowledge base first')
-      throw new Error('knowledgeBaseId is required')
+      return all.find((item) => item.focused) ?? all.find((item) => item.isDefault) ?? all[0]
     },
     /**
      * 还没有知识库、但已经有页面或原料时，归入一个默认库，并绑定产生过原料的数据源。
@@ -264,7 +394,7 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
         const proposals = store.proposals.list()
         if (mats.length === 0 && pages.length === 0 && proposals.length === 0) return null
         const datasourceIds = [...new Set(mats.map((item) => item.datasourceId).filter((id) => Number.isInteger(id) && id > 0))]
-        const base = await putBase({ name: '默认知识库', description: '', datasourceIds })
+        const base = await putBase({ name: '默认知识库', description: '', datasourceIds, isDefault: true, focused: true })
         for (const item of mats) {
           if (!item.knowledgeBaseId) await materials.assignBase(item.id, base.id)
         }
@@ -278,4 +408,10 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       })
     },
   }
+}
+
+function cancelledError() {
+  const error = new Error('cancelled')
+  error.code = 'cancelled'
+  return error
 }

@@ -1,5 +1,5 @@
 /**
- * 原料（corpus 产出，只追加）。一条原料对应一次投递；同一来源与内容哈希再次投递返回已有 id。
+ * 原料。同一知识库、同一来源引用只保留一条。内容没变时再次投递返回已有 id；内容变了则就地更新，并回到待编译。
  * status 与 decisionId 必须在同一笔存储更新中写入：captured → decided | failed，failed 可重置为 captured 重放。
  */
 import { createHash } from 'node:crypto'
@@ -30,9 +30,9 @@ export function contentHashOf(content) {
   return createHash('sha256').update(String(content), 'utf8').digest('hex')
 }
 
-/** 幂等键：同一知识库、同一来源引用与同一内容哈希视为同一条原料。 */
-export function materialIdempotencyKey({ knowledgeBaseId = '', sourceType, sourceRef, contentHash }) {
-  return `${knowledgeBaseId}\u0000${sourceType}\u0000${sourceRef}\u0000${contentHash}`
+/** 幂等键：同一知识库、同一来源引用是同一条原料。内容哈希只校验正文，不参与区分。 */
+export function materialIdempotencyKey({ knowledgeBaseId = '', sourceType, sourceRef }) {
+  return `${knowledgeBaseId}\u0000${sourceType}\u0000${sourceRef}`
 }
 
 /** 投递入参：采集器交给 corpus 的内容，尚未分配 id。 */
@@ -73,6 +73,7 @@ export function validateRawMaterial(o) {
     e.push('only failed materials carry failureReason')
   }
   if (!isIso(o.createdAt)) e.push('createdAt must be an ISO-8601 timestamp')
+  if (o.updatedAt !== undefined && !isIso(o.updatedAt)) e.push('updatedAt must be an ISO-8601 timestamp')
   if (o.knowledgeBaseId !== undefined && !isStr(o.knowledgeBaseId)) e.push('knowledgeBaseId must be a non-empty string')
   return finish(e)
 }

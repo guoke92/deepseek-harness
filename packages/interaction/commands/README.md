@@ -43,7 +43,7 @@ ctx.commands.register({
 })
 ```
 
-The handler returns `success` or `error` plus optional UI text that the adapter renders. `recordInput` defaults to true; a command whose own authoritative domain event already carries the payload sets it to false so the session log does not duplicate the input. Registering the same name twice in one scope throws.
+The handler returns `success` or `error` plus optional UI text that the adapter renders. `recordInput` defaults to true; a command whose own authoritative domain event already carries the payload sets it to false so the session log does not duplicate the input. `recordResult` defaults to true; a panel RPC sets it to false so the caller still receives `text` while `command/done` omits that copy. `recordLifecycle` defaults to true; a panel RPC sets it to false so execution returns the result without appending `command/run` or `command/done`. `listed` defaults to included; set it false to keep execution available while omitting the command from discovery menus. Registering the same name twice in one scope throws.
 
 ### Command syntax
 

@@ -23,4 +23,8 @@ export {
   normalizeTopicKey, validateMemoryTombstone, validateSupersede, validateActiveCount,
 } from './memory.js'
 export { defaultPolicy, validatePolicy, validatePolicyScope, mergePolicy } from './policy.js'
+export {
+  DB_EVIDENCE_KIND, DB_FACT_CONFIDENCE, dbSlugPart, validateDbTableEvidence, dbDocumentGaps,
+  renderDbTable, renderDictionary, renderRelation, relationBasis, relationReviewBrief, compileDbDocument,
+} from './db-document.js'
 export { LOG_TYPES, formatLogEntry, parseLogEntry } from './log.js'

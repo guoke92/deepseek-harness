@@ -1,6 +1,6 @@
 /**
  * 页面 slug 与 [[slug]] 链接解析。
- * slug 形如 `index`、`entity/ca_fee_order`、`concept/order_status`：小写字母、数字、下划线、连字符，最多一级目录。
+ * slug 形如 `index`、`entity/ca_fee_order`、`concept/order_status`、`relation/order_company_link`：小写字母、数字、下划线、连字符，最多一级目录。
  */
 import { finish } from './common.js'
 

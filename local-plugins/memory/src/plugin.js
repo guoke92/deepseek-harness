@@ -118,6 +118,9 @@ export function apply(ctx, config = {}) {
       name: 'memory',
       description: '记忆面板操作。参数是 JSON：{op, id?, kind?, content?, topic?}',
       recordInput: false,
+      recordResult: false,
+      recordLifecycle: false,
+      listed: false,
       handler: async (invocation) => {
         try {
           const body = JSON.parse(String(invocation.rawInput ?? '').trim() || '{}')

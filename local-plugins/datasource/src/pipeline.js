@@ -1,61 +1,90 @@
 /**
- * datasource 的剖析与候选管线（P1）：读结构 → 计行数 → 采样 → buildProfile → generateCandidates。
- * 只读；不写 wiki。输出 { profiles, candidates, rawMaterials }，原料按 contracts.RawMaterial 形状给出。
+ * 采集一条库的表文档：读结构、精确行数、整表采样、值域和关系。
+ * 只读。每张表产出一条原料，正文来自 contracts 的同一渲染。
  */
-import { readColumns, readRowCounts, sampleColumn } from './connector.js'
-import { buildProfile } from './profile.js'
-import { generateCandidates } from './candidates.js'
-import { randomUUID } from 'node:crypto'
+import { measureOverlaps, readRowCounts, readTableMetas, sampleTable } from './connector.js'
+import { buildTableFacts, declaredEndpoints, discoverRelations, evidenceFor, judgeOverlap } from './document.js'
+import { tableMaterial } from './deliver.js'
 
 /**
- * @param {object} cfg 数据源连接配置（type/host/port/database/username/password）
+ * @param {object} cfg 数据源连接配置
  * @param {object} opts
  * @param {number} opts.datasourceId
- * @param {string[]|null} opts.tables 表范围，null 为全部
- * @param {object} opts.policy wiki 策略的 wiki 段（来自 contracts.defaultPolicy().wiki 合并结果）
+ * @param {string[]|null} opts.tables
+ * @param {object} opts.policy wiki 策略里的 wiki 段
  */
-export async function profileDatasource(cfg, { datasourceId, tables = null, policy }) {
-  const cols = await readColumns(cfg, { tables })
-  const tableNames = [...new Set(cols.map((c) => c.table))]
-  const rowCounts = await readRowCounts(cfg, tableNames)
-  const profiles = []
-  for (const table of tableNames) {
-    const tableCols = cols.filter((c) => c.table === table)
-    for (const column of tableCols) {
-      const values = await sampleColumn(cfg, table, column.name, policy.profileSampleRows)
-      profiles.push(buildProfile({
-        table,
-        column: { name: column.name, dataType: column.dataType, comment: column.comment },
-        values,
-        rowCount: rowCounts[table],
-        sampleRows: Math.min(values.length, policy.profileSampleRows),
-        k: policy.minhashK,
-        dictDistinctMax: policy.dictDistinctMax,
-        highDefaultRatio: policy.highDefaultRatio,
-      }))
+export async function profileDatasource(cfg, { datasourceId, tables = null, policy, onProgress, signal, gate }) {
+  onProgress?.({ phase: 'catalog', done: 0, total: 0, message: '读取结构' })
+  const metas = await readTableMetas(cfg, tables)
+  onProgress?.({ phase: 'count', done: 0, total: metas.length, message: '统计行数' })
+  const counts = await readRowCounts(cfg, metas.map((meta) => meta.tableKey))
+  const partials = []
+  const keys = []
+  let done = 0
+  for (const meta of metas) {
+    if (signal?.aborted) throw cancelled()
+    if (gate) await gate()
+    onProgress?.({ phase: 'profile', done, total: metas.length, message: meta.tableKey })
+    meta.rowCount = counts[meta.tableKey] ?? 0
+    const sample = await sampleTable(cfg, meta, policy.profileSampleRows)
+    if (signal?.aborted) throw cancelled()
+    const facts = buildTableFacts(meta, sample, policy)
+    partials.push(facts)
+    keys.push(...facts.keys)
+    done += 1
+    onProgress?.({ phase: 'profile', done, total: metas.length, message: meta.tableKey })
+  }
+  const declared = declaredEndpoints(partials)
+  const complete = keys.filter((key) => !key.partial)
+  const relations = discoverRelations(complete, declared.pairs)
+  const probes = []
+  for (const big of keys) {
+    if (!big.partial || !big.probe) continue
+    for (const small of complete) {
+      if (!small.probe || !small.values?.length || sameTableName(small.table, big.table)) continue
+      probes.push({ big, small })
     }
   }
-  const candidates = generateCandidates(profiles, { dictDistinctMax: policy.dictDistinctMax })
-  const at = new Date().toISOString()
-  const rawMaterials = profiles.map((p) => ({
-    schemaVersion: 1,
-    id: `raw_${randomUUID().replace(/-/g, '').slice(0, 16)}`,
-    sourceType: 'db',
-    sourceRef: `database_profile:${p.table}.${p.column}`,
+  if (probes.length > 0) {
+    const measured = await measureOverlaps(cfg, probes.map((item) => ({
+      table: item.big.table,
+      column: item.big.column,
+      values: item.small.values,
+    })))
+    probes.forEach((item, index) => {
+      const stats = measured[index]
+      const relation = judgeOverlap(item.small, {
+        table: item.big.table,
+        column: item.big.column,
+        distinct: stats.distinct,
+        nonNull: stats.nonNull,
+        rowCount: item.big.rowCount,
+        uniqueness: stats.nonNull ? stats.distinct / stats.nonNull : 0,
+        bareId: item.big.bareId,
+      }, stats.hits, declared.pairs)
+      if (relation) relations.push(relation)
+    })
+    relations.sort((a, b) => `${a.fromTable}.${a.fromColumn}->${a.toTable}.${a.toColumn}`.localeCompare(`${b.fromTable}.${b.fromColumn}->${b.toTable}.${b.toColumn}`))
+  }
+  const materials = partials.map((partial) => tableMaterial(
+    evidenceFor(partial, relations, declared.foreignKeys),
     datasourceId,
-    content: describeProfile(p),
-    evidence: { rowCount: p.rowCount, nullCount: p.nullCount, distinctCount: p.distinctCount, distinctApprox: p.distinctApprox, skipReason: p.skipReason, excludedDefaults: p.excludedDefaults },
-    createdAt: at,
-  }))
-  return { profiles, candidates, rawMaterials }
+  ))
+  const keep = []
+  for (const material of materials) {
+    for (const column of material.evidence.columns) {
+      if (column.dictionary) keep.push({ table: material.evidence.table, column: column.name })
+    }
+  }
+  return { materials, dicts: { keep, hold: [], drop: [] } }
 }
 
-/** 机械生成的一句话剖析描述（论文 2.1 的"机械英文描述"对应物，中文）。 */
-export function describeProfile(p) {
-  const parts = [`${p.table}.${p.column}`]
-  parts.push(`行数 ${p.rowCount}，空值 ${p.nullCount}，不同值 ${p.distinctCount}${p.distinctApprox ? '（近似）' : ''}`)
-  if (p.skipReason) parts.push(`跳过关联（${p.skipReason}）`)
-  if (p.isDictLike && !p.skipReason) parts.push('低基数，候选字典')
-  if (p.topK.length) parts.push(`高频值 ${p.topK.slice(0, 5).map((x) => x.value).join('、')}`)
-  return parts.join('；')
+function sameTableName(left, right) {
+  return left === right || String(left).endsWith(`.${right}`) || String(right).endsWith(`.${left}`)
+}
+
+function cancelled() {
+  const error = new Error('cancelled')
+  error.code = 'cancelled'
+  return error
 }

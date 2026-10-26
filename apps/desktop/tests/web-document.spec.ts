@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { authenticateWebHost, forwardWebRequest, serveWebDocument } from '../src/web-document.ts'
+import { authenticateWebHost, authenticatedHostFetch, forwardWebRequest, serveWebDocument } from '../src/web-document.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -33,6 +33,21 @@ it('requires the Host authentication exchange and retains only its cookie value'
   vi.stubGlobal('fetch', fetch)
   expect(await authenticateWebHost('http://127.0.0.1:1234/?token=owned')).toBe('session=owned')
   await expect(authenticateWebHost('http://127.0.0.1:1234/')).rejects.toThrow('authentication failed')
+})
+
+it('sends the launch cookie after the minting redirect and on the next call', async () => {
+  const cookie = { value: '' }
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(new Response(null, { status: 303, headers: { 'set-cookie': 'session=owned; HttpOnly; SameSite=Strict', location: './' } }))
+    .mockResolvedValueOnce(new Response('index', { status: 200 }))
+    .mockResolvedValueOnce(new Response('ok', { status: 200 }))
+  vi.stubGlobal('fetch', fetch)
+  const send = authenticatedHostFetch({ get: () => cookie.value, set: (value) => { cookie.value = value } })
+  expect(await (await send('http://127.0.0.1:1234/?token=owned')).text()).toBe('index')
+  expect(cookie.value).toBe('session=owned')
+  expect(new Headers((fetch.mock.calls[1] as [string, RequestInit])[1].headers).get('cookie')).toBe('session=owned')
+  await send('http://127.0.0.1:1234/api/settings/describe', { method: 'POST', body: '{}' })
+  expect(new Headers((fetch.mock.calls[2] as [string, RequestInit])[1].headers).get('cookie')).toBe('session=owned')
 })
 
 it('forwards upload bytes and cancellation with Host credentials while keeping the response streaming', async () => {

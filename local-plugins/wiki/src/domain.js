@@ -1,5 +1,5 @@
 /**
- * wiki 的 storage domain：原料（只追加）与页面、提议、版本、日志。
+ * wiki 的 storage domain：原料与页面、提议、版本、日志。同一来源只保留一条原料。
  * 从数据源加工出的原料由本插件保存。细节校验由 @local/contracts 完成。
  */
 import { z } from 'zod'
@@ -11,7 +11,7 @@ export const WIKI_DOMAIN_VERSION = 1
 export const pageRecord = z.object({
   schemaVersion: z.literal(1),
   slug: z.string().min(1),
-  pageType: z.enum(['entity', 'concept', 'summary', 'index', 'synthesis', 'comparison']),
+  pageType: z.enum(['entity', 'concept', 'relation', 'summary', 'index', 'synthesis', 'comparison']),
   title: z.string(),
   status: z.enum(['draft_only', 'published', 'published_with_draft', 'archived']),
   version: z.number().int().nonnegative(),
@@ -53,6 +53,7 @@ export const materialRecord = z.object({
   decisionId: z.string().min(1).nullable(),
   failureReason: z.string().optional(),
   createdAt: z.string().min(1),
+  updatedAt: z.string().min(1).optional(),
   knowledgeBaseId: z.string().min(1).optional(),
 })
 
@@ -62,7 +63,14 @@ export const baseRecord = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(300),
   datasourceIds: z.array(z.number().int().positive()),
-  scopes: z.record(z.string(), z.object({ tables: z.array(z.string().min(1)).max(400) })).optional(),
+  scopes: z.record(z.string(), z.object({ tables: z.array(z.string().min(1)) })).optional(),
+  isDefault: z.boolean().optional(),
+  focused: z.boolean().optional(),
+  collects: z.record(z.string(), z.object({
+    state: z.enum(['done', 'failed', 'cancelled']),
+    error: z.string().nullable(),
+    finishedAt: z.string().nullable(),
+  })).optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
 })

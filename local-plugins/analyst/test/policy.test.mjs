@@ -57,6 +57,14 @@ test('buildQueryPrompt: safety constraints are always present and never loosened
   assert.match(t, /不得出现在回答中/)
 })
 
+test('buildQueryPrompt: an unmapped concept stops before a substitute statistic', () => {
+  const t = buildQueryPrompt(defaultPolicy())
+  assert.match(t, /当前知识库答不了/)
+  assert.match(t, /不要为了寻找替代口径执行 SQL/)
+  assert.match(t, /对不上口径时不要输出替代统计的表格/)
+  assert.doesNotMatch(t, /说明假设/)
+})
+
 test('buildQueryPrompt: clarify rules are rendered as policy, not hard-coded', () => {
   const p = defaultPolicy()
   p.query.clarify.requireWhen = ['统计口径未指定时间范围']

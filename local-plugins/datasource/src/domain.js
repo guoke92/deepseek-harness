@@ -19,6 +19,11 @@ export const datasourceRecord = z.object({
     schemas: z.array(z.string()).optional(),
     tables: z.array(z.string()).optional(),
   }),
+  connection: z.object({
+    status: z.enum(['unknown', 'ok', 'failed']),
+    checkedAt: isoString.nullable(),
+    error: z.string().nullable(),
+  }).optional(),
   createdAt: isoString,
   updatedAt: isoString,
 })

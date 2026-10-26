@@ -55,7 +55,7 @@ test('replay of fixed materials: high confidence publishes, mid confidence draft
   assert.equal(svc.page('concept/order_status').status, 'draft_only', 'confidence 0.6 is between thresholds')
   assert.equal(svc.page('concept/order_status').published, null)
   assert.equal(svc.page('entity/cust_account_info').status, 'published')
-  assert.equal(svc.page('entity/legacy_import'), undefined)
+  assert.equal(svc.page('entity/legacy_import'), null)
   const props = svc.proposals()
   assert.equal(props.length, 1)
   assert.equal(props[0].slug, 'entity/legacy_import')

@@ -1,9 +1,9 @@
 /**
  * 问数查询侧（P3）的纯函数部分：
  *  - searchPages：按关键词检索 wiki 页面，每条结果带口径标签（已发布 / 草稿），草稿可选择排除
- *  - buildValueIndex：由列剖析的 topK 取值建立 取值 → 字段 的倒排索引
+ *  - buildValueIndex：由表原料证据里的取值建立 取值 → 字段 的倒排索引
  *  - checkLiterals：检查 SQL 中的字符串字面值是否落在被引用的字段上（借鉴论文的模式链接做法）
- * 注意：值索引只覆盖每列的 topK（默认 10）取值，因此"未找到"不等于"不存在"，结果中会如实标注。
+ * 注意：值索引只覆盖传入的取值，因此"未找到"不等于"不存在"，结果中会如实标注。
  */
 
 export const CALIBER_LABEL = Object.freeze({
@@ -72,8 +72,8 @@ export function searchPages(pages, query, { limit = 8, includeDrafts = true } = 
 }
 
 /**
- * 由列剖析（datasource buildProfile 的产出）建立 取值 → Set(table.column) 的倒排索引。
- * 只使用 topK，因此覆盖范围有限。
+ * 由表原料证据里的取值建立 取值 → Set(table.column) 的倒排索引。
+ * 只使用传入的 topK，因此覆盖范围有限。
  */
 export function buildValueIndex(profiles) {
   const idx = new Map()

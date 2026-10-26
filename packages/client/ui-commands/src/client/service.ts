@@ -227,6 +227,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const seen = new Set<string>()
     for (const c of list) {
       seen.add(c.name)
+      if (c.listed === false) continue
       rows.push({
         name: c.name,
         ...(builtinRowFace(c, this.t) ?? { description: c.description }),

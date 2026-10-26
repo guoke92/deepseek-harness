@@ -33,6 +33,8 @@ export function applyDecision(decision, env) {
       slug: decision.slug,
       reason: decision.review.reasons.join('; '),
       reasons: decision.review.reasons,
+      ...(typeof decision.review.brief === 'string' ? { brief: decision.review.brief } : {}),
+      ...(decision.review.publish ? { publish: decision.review.publish } : {}),
       decisionId: env.decisionId,
       createdAt: at,
       status: 'open',
@@ -56,7 +58,7 @@ export function applyDecision(decision, env) {
     return { outcome: 'log', slug: decision.slug }
   }
 
-  const existing = env.pages.get(decision.slug)
+  const existing = env.pages.get(decision.slug, env.knowledgeBaseId)
   if (existing && env.knowledgeBaseId && existing.knowledgeBaseId && existing.knowledgeBaseId !== env.knowledgeBaseId) {
     return { outcome: 'rejected', slug: decision.slug, reason: 'page belongs to another knowledge base' }
   }
@@ -88,7 +90,7 @@ export function applyDecision(decision, env) {
   }
 
   if (route === 'publish') {
-    if (next.published) env.revisions?.snapshot(decision.slug, next.version, next.published, source, at)
+    if (next.published) env.revisions?.snapshot(decision.slug, next.version, next.published, source, at, env.knowledgeBaseId)
     next.published = content
     next.draft = null
     next.version = (next.version ?? 0) + 1
@@ -109,11 +111,47 @@ export function applyDecision(decision, env) {
   return { outcome: route === 'publish' ? 'published' : 'draft', slug: decision.slug }
 }
 
+/**
+ * 同一批决策一起落地。预演有一条被拒绝时，一条都不写。
+ * @param {object[]} decisions
+ * @param {object} env applyDecision 的 env
+ * @returns {{applied: object[], rejected: object|null}}
+ */
+export function applyDecisions(decisions, env) {
+  const overlay = new Map()
+  const preview = {
+    ...env,
+    pages: {
+      get(slug, knowledgeBaseId) {
+        const key = overlayKey(knowledgeBaseId || env.knowledgeBaseId, slug)
+        if (overlay.has(key)) return overlay.get(key) || undefined
+        return env.pages.get(slug, knowledgeBaseId || env.knowledgeBaseId)
+      },
+      put(slug, record) {
+        overlay.set(overlayKey(record.knowledgeBaseId || env.knowledgeBaseId, slug), record)
+      },
+    },
+    proposals: { add() {} },
+    revisions: { snapshot() {} },
+    log() {},
+  }
+  for (const decision of decisions) {
+    const result = applyDecision(decision, preview)
+    if (result.outcome === 'rejected') return { applied: [], rejected: result }
+  }
+  const applied = decisions.map((decision) => applyDecision(decision, env))
+  return { applied, rejected: applied.find((result) => result.outcome === 'rejected') ?? null }
+}
+
+function overlayKey(knowledgeBaseId, slug) {
+  return `${knowledgeBaseId || ''}\0${slug}`
+}
+
 /** 人工确认草稿：草稿覆盖发布正文，版本递增，旧发布正文先写入版本历史。 */
 export function promoteDraft(slug, env) {
-  const page = env.pages.get(slug)
+  const page = env.pages.get(slug, env.knowledgeBaseId)
   if (!page?.draft) return { ok: false, reason: 'no draft to promote' }
-  if (page.published) env.revisions?.snapshot(slug, page.version, page.published, 'user', env.now())
+  if (page.published) env.revisions?.snapshot(slug, page.version, page.published, 'user', env.now(), env.knowledgeBaseId)
   const next = { ...page, published: { ...page.draft, editSource: 'user', editedAt: env.now() }, draft: null, status: 'published', version: page.version + 1 }
   env.pages.put(slug, next)
   env.log({ type: 'publish', ref: slug, summary: `draft promoted to v${next.version}` })
@@ -122,10 +160,10 @@ export function promoteDraft(slug, env) {
 
 /** 回滚：把指定历史版本的快照写成一个新版本（不删除历史）。 */
 export function revertTo(slug, version, env) {
-  const page = env.pages.get(slug)
-  const snap = env.revisions?.get(slug, version)
+  const page = env.pages.get(slug, env.knowledgeBaseId)
+  const snap = env.revisions?.get(slug, version, env.knowledgeBaseId)
   if (!page || !snap) return { ok: false, reason: 'missing page or version' }
-  env.revisions.snapshot(slug, page.version, page.published, 'revert', env.now())
+  env.revisions.snapshot(slug, page.version, page.published, 'revert', env.now(), env.knowledgeBaseId)
   const next = { ...page, published: { ...snap, editSource: 'revert', editedAt: env.now() }, draft: null, status: 'published', version: page.version + 1 }
   env.pages.put(slug, next)
   return { ok: true, version: next.version }

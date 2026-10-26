@@ -27,17 +27,13 @@
   justify-content: space-between;
   gap: 16px;
   box-sizing: border-box;
-  /* The page's former top inset: the row starts at the window's top edge, so the whole
-     strip above the page content drags the window. */
-  padding-top: 28px;
+  /* The head starts at the window's top edge and owns the drag over this padding. */
+  padding-top: 16px;
 }
 
-/* macOS hiddenInset titlebar: the frame's top clearance keeps the head below
-   the window's top strip in both sidebar states so it never jumps, and the head
-   owns the window drag over its own box — clearance included — so this page's
-   top strip drags without a frame band. */
+/* macOS hiddenInset titlebar: the frame clearance keeps the head below the top strip. */
 :global([data-platform='darwin']) .pageHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: var(--dsh-frame-top-clearance, 16px);
 }
 
 .pageHeading {
@@ -1211,9 +1207,9 @@ label.registryOption {
 .detailTop,
 .moreHead {
   display: flex;
-  /* The same 28px top inset `.pageHead` carries, so the row starts at the window's
+  /* The same top inset `.pageHead` carries, so the row starts at the window's
      top edge and the strip above the detail content drags the window. */
-  padding-top: 28px;
+  padding-top: 16px;
 }
 
 .detailTop {
@@ -1222,7 +1218,7 @@ label.registryOption {
 
 :global([data-platform='darwin']) .detailTop,
 :global([data-platform='darwin']) .moreHead {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: var(--dsh-frame-top-clearance, 16px);
 }
 
 .crumb {

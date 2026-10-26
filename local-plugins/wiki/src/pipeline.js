@@ -9,6 +9,16 @@
 import { validateDecision } from '@local/contracts'
 import { applyDecision } from './apply.js'
 
+function cancelled() {
+  const error = new Error('cancelled')
+  error.code = 'cancelled'
+  return error
+}
+
+function isAbort(error, signal) {
+  return signal?.aborted === true || error?.name === 'AbortError' || error?.code === 'cancelled'
+}
+
 /**
  * @param {object[]} materials 待决策原料（status=captured）
  * @param {{decide: (batch: object[], context: object) => Promise<object[]>, context: (material: object) => object,
@@ -20,14 +30,18 @@ export async function runDecisionBatch(materials, deps) {
   let decided = 0
   let failed = 0
   const attempts = deps.maxAttempts ?? 2
-  for (const material of materials) {
+  for (let index = 0; index < materials.length; index++) {
+    const material = materials[index]
+    if (deps.before) await deps.before(material, index, materials.length)
     let decisions = null
     let lastError = ''
     for (let i = 0; i < attempts; i++) {
+      if (deps.signal?.aborted) throw cancelled()
       let raw
       try {
         raw = await deps.decide([material], deps.context(material))
       } catch (err) {
+        if (isAbort(err, deps.signal)) throw err?.code === 'cancelled' ? err : cancelled()
         lastError = `decide failed: ${String(err?.message ?? err)}`
         continue
       }

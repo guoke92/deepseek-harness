@@ -13,16 +13,24 @@ export async function dispatchWiki(api, body) {
   if (op === 'bind') return { base: await api.bindDatasource(body.id, body.datasourceId) }
   if (op === 'unbind') return { base: await api.unbindDatasource(body.id, body.datasourceId) }
   if (op === 'setScope') return { base: await api.setScope(body.id, body.datasourceId, body.tables ?? []) }
+  if (op === 'setDefault') return { base: await api.setDefault(body.id) }
+  if (op === 'setFocus') return { base: await api.setFocus(body.id) }
   if (op === 'outline') return { outline: await api.outline(knowledgeBaseId) }
   if (op === 'pages') return { pages: await api.pages(knowledgeBaseId) }
-  if (op === 'page') return { page: await api.page(body.slug) }
+  if (op === 'page') return { page: await api.page(body.slug, knowledgeBaseId) }
   if (op === 'materials') return { materials: await api.listMaterials(knowledgeBaseId) }
+  if (op === 'materialRemove') return { removed: await api.removeMaterial(body.id) }
+  if (op === 'materialsClear') return await api.clearMaterials(knowledgeBaseId)
   if (op === 'proposals') return { proposals: await api.proposals(knowledgeBaseId) }
-  if (op === 'promote') return await api.promote(body.slug)
-  if (op === 'revert') return await api.revert(body.slug, body.version)
+  if (op === 'promote') return await api.promote(body.slug, knowledgeBaseId)
+  if (op === 'revert') return await api.revert(body.slug, body.version, knowledgeBaseId)
   if (op === 'resolve') return await api.resolveProposal(body.id, body.status)
-  if (op === 'collect') return await api.collect(body.datasourceId, { knowledgeBaseId, tables: body.tables ?? null, profileSampleRows: body.profileSampleRows })
-  if (op === 'compile') return await api.compile(knowledgeBaseId)
+  if (op === 'collect') return { task: api.startCollect(body.datasourceId, { knowledgeBaseId, tables: body.tables ?? null, profileSampleRows: body.profileSampleRows }) }
+  if (op === 'compile') return { task: api.startCompile(knowledgeBaseId) }
+  if (op === 'task') return { task: api.task() }
+  if (op === 'taskPause') return { task: api.pauseTask() }
+  if (op === 'taskResume') return { task: api.resumeTask() }
+  if (op === 'taskCancel') return { task: api.cancelTask() }
   if (op === 'expand') return await api.expand(body.center ?? body.slug, { depth: body.depth ?? 1, knowledgeBaseId })
   throw new Error(`unknown wiki op: ${String(op)}`)
 }

@@ -1,10 +1,11 @@
 /**
- * 原料存储（只追加）。存储介质由调用方注入：生产环境是 storage domain 的 table，测试是内存 Map。
+ * 原料存储。存储介质由调用方注入：生产环境是 storage domain 的 table，测试是内存 Map。
  *
  * 不变式：
- *  - 同一幂等键（sourceType + sourceRef + contentHash）只产生一条原料，重复投递返回已有 id。
- *  - status 与 decisionId 在同一次 update 中写入（由 mutate 回调在单写者队列内完成）。
- *  - 记录不删除、不改写 content；状态迁移经 contracts.validateMaterialTransition 校验。
+ *  - 同一幂等键（知识库 + sourceType + sourceRef）只保留一条原料。
+ *  - 内容没变时再次投递返回已有 id，不改状态。
+ *  - 内容变了则就地更新正文和证据，状态回到 captured，并清掉多余的重复行。
+ *  - status 与 decisionId 在同一次 update 中写入。状态迁移经 contracts.validateMaterialTransition 校验。
  */
 import { randomBytes } from 'node:crypto'
 import {
@@ -19,6 +20,7 @@ import { createSerialQueue } from './queue.js'
  * @property {() => object[]} list
  * @property {(record: object) => Promise<void>} insert
  * @property {(id: string, mutate: (current: object) => object) => Promise<object>} update
+ * @property {(id: string) => Promise<unknown>} delete
  */
 
 /**
@@ -27,10 +29,54 @@ import { createSerialQueue } from './queue.js'
 export function createMaterialStore({ table, now = () => new Date().toISOString(), newId = defaultId }) {
   const queue = createSerialQueue()
   const byKey = new Map()
-  for (const m of table.list()) byKey.set(materialIdempotencyKey(m), m.id)
+  const sourceKey = (record) => materialIdempotencyKey(record)
+  const oldest = (rows) => rows.slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1))[0]
+  const newest = (rows) => rows.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : a.id < b.id ? 1 : -1))[0]
+  const seeded = new Map()
+  for (const row of table.list()) {
+    const key = sourceKey(row)
+    seeded.set(key, [...(seeded.get(key) ?? []), row])
+  }
+  for (const [key, rows] of seeded) byKey.set(key, oldest(rows).id)
+
+  /**
+   * 把同一来源的多条原料收成最早的那条。内容取最新的一条。
+   * @param {object[]} rows
+   * @param {{content: string, evidence: object, datasourceId: number|null, updatedAt?: string}|null} incoming
+   */
+  async function collapse(rows, incoming) {
+    const canonical = oldest(rows)
+    const fresh = incoming ?? newest(rows)
+    const contentHash = incoming ? contentHashOf(incoming.content) : fresh.contentHash
+    const changed = contentHash !== canonical.contentHash
+    if (changed) {
+      const next = await table.update(canonical.id, (cur) => {
+        const { failureReason: _drop, ...rest } = cur
+        return {
+          ...rest,
+          content: fresh.content,
+          contentHash,
+          evidence: fresh.evidence,
+          datasourceId: fresh.datasourceId,
+          status: 'captured',
+          decisionId: null,
+          updatedAt: incoming?.updatedAt ?? fresh.updatedAt ?? fresh.createdAt ?? now(),
+        }
+      })
+      const checked = validateRawMaterial(next)
+      if (!checked.ok) throw new Error(`material record invalid: ${checked.errors.join('; ')}`)
+    }
+    for (const row of rows) {
+      if (row.id === canonical.id) continue
+      await table.delete(row.id)
+    }
+    byKey.set(sourceKey(canonical), canonical.id)
+    return canonical.id
+  }
 
   /**
    * 投递一条原料。返回 { id, created }。
+   * 同一来源已存在时不新增。内容有变化则更新那一条并回到待编译。
    * @param {object} input 符合 validateMaterialInput 的投递内容
    */
   function capture(input) {
@@ -41,11 +87,14 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
       knowledgeBaseId: input.knowledgeBaseId ?? '',
       sourceType: input.sourceType,
       sourceRef: input.sourceRef,
-      contentHash,
     })
     return queue.run(async () => {
-      const existing = byKey.get(key)
-      if (existing) return { id: existing, created: false }
+      const rows = table.list().filter((row) => sourceKey(row) === key)
+      if (rows.length === 1 && rows[0].contentHash === contentHash) return { id: rows[0].id, created: false }
+      if (rows.length > 0) {
+        const id = await collapse(rows, { content: input.content, evidence: input.evidence, datasourceId: input.datasourceId, updatedAt: now() })
+        return { id, created: false }
+      }
       const record = {
         schemaVersion: SCHEMA_VERSION,
         id: newId(),
@@ -110,10 +159,41 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
     })
   }
 
+  /**
+   * 启动时收掉同一来源的重复原料。保留最早的 id，正文用最新的一条。
+   */
+  function reconcile() {
+    return queue.run(async () => {
+      const groups = new Map()
+      for (const row of table.list()) {
+        const key = sourceKey(row)
+        groups.set(key, [...(groups.get(key) ?? []), row])
+      }
+      for (const rows of groups.values()) {
+        if (rows.length < 2) continue
+        await collapse(rows, null)
+      }
+    })
+  }
+
   return {
     capture,
     transition,
     assignBase,
+    reconcile,
+    /**
+     * 删除一条原料，并放开它的幂等键。
+     * @param {string} id
+     */
+    remove(id) {
+      return queue.run(async () => {
+        const current = table.get(id)
+        if (!current) throw new Error(`material ${id} not found`)
+        await table.delete(id)
+        for (const [key, value] of byKey) if (value === id) byKey.delete(key)
+        return true
+      })
+    },
     get: (id) => table.get(id),
     /** @returns {object[]} 所有原料，按创建时间升序 */
     list: () => table.list().slice().sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0)),
@@ -143,5 +223,6 @@ export function createMemoryTable(seed = []) {
       rows.set(id, structuredClone(next))
       return structuredClone(next)
     },
+    async delete(id) { rows.delete(id) },
   }
 }

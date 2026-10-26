@@ -52,16 +52,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  /* The column's former top inset: the row starts at the window's top edge, so
-     the whole strip above the heading belongs to the row's own box. */
-  padding-top: 28px;
+  /* The row starts at the window's top edge. Its padding is the drag strip,
+     matching the Plugins page head. */
+  padding-top: 16px;
   margin-bottom: 24px;
 }
 
-/* macOS hiddenInset titlebar: the Plugins page's head carries the frame's top
-   clearance above its own 28px inset, so both pages keep the same 76px total. */
+/* macOS hiddenInset titlebar: the frame clearance keeps the heading below the
+   top strip, matching the Plugins page head. */
 :global([data-platform='darwin']) .pageHeading {
-  padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px));
+  padding-top: var(--dsh-frame-top-clearance, 16px);
 }
 
 /* The first-level page title, on the Plugins page's own `pageTitle` step

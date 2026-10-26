@@ -145,10 +145,11 @@ export class SqlGuardError extends Error {
 /**
  * 检查只读 SQL。通过时返回原始文本（未做任何改写）。
  * @param {string} sql 调用方原始语句
- * @param {{dialect: 'postgresql'|'mysql', forbiddenTables?: string[], forbiddenColumns?: string[]}} options
+ * @param {{dialect: 'postgresql'|'mysql', forbiddenTables?: string[], forbiddenColumns?: string[], allowedTables?: string[]|null}} options
+ * `allowedTables` 有值时，语句里的表必须落在这份范围里。范围项可以是表名，或 `库.表` / `schema.表`。
  * @returns {{ok: true, sql: string, tables: string[]} | {ok: false, reason: string}}
  */
-export function checkReadonlySql(sql, { dialect, forbiddenTables = [], forbiddenColumns = [] }) {
+export function checkReadonlySql(sql, { dialect, forbiddenTables = [], forbiddenColumns = [], allowedTables = null }) {
   if (!DIALECTS.includes(dialect)) return { ok: false, reason: `unknown dialect: ${dialect}` }
   if (typeof sql !== 'string' || sql.trim() === '') return { ok: false, reason: 'empty sql' }
   let tokens
@@ -196,6 +197,14 @@ export function checkReadonlySql(sql, { dialect, forbiddenTables = [], forbidden
   const forbidden = new Set(forbiddenTables.map((t) => t.toLowerCase()))
   const hitTable = tables.find((t) => forbidden.has(t.toLowerCase()))
   if (hitTable) return { ok: false, reason: `table is forbidden by policy: ${hitTable}` }
+  if (Array.isArray(allowedTables)) {
+    const allowed = allowedTables.map((t) => String(t).toLowerCase())
+    const outside = tables.find((name) => {
+      const table = name.toLowerCase()
+      return !allowed.some((scope) => scope === table || scope.endsWith(`.${table}`))
+    })
+    if (outside) return { ok: false, reason: `table is outside the selected scope: ${outside}` }
+  }
   const forbiddenCols = new Set(forbiddenColumns.map((c) => c.toLowerCase()))
   const hitCol = body.find((t) => (t.t === 'word' || t.t === 'ident') && forbiddenCols.has(String(t.v).toLowerCase()))
   if (hitCol) return { ok: false, reason: `column is forbidden by policy: ${hitCol.v}` }

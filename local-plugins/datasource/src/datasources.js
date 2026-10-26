@@ -33,6 +33,28 @@ export function validateDatasourceConfig(input) {
 }
 
 /**
+ * 把探测请求收成连接参数。密码留空时用已保存的凭据。
+ * check 和尚未保存的 catalog 都走这里。
+ * @param {object} body
+ * @param {string|undefined} storedPassword
+ */
+export function probeConfig(body, storedPassword) {
+  let password = typeof body?.password === 'string' ? body.password : ''
+  if (password === '' && typeof storedPassword === 'string') password = storedPassword
+  const cfg = {
+    type: body?.type,
+    host: typeof body?.host === 'string' ? body.host.trim() : '',
+    port: Number(body?.port ?? (body?.type === 'mysql' ? 3306 : 5432)),
+    database: typeof body?.database === 'string' ? body.database.trim() : '',
+    username: typeof body?.username === 'string' ? body.username : '',
+    password,
+  }
+  const checked = validateDatasourceConfig(cfg)
+  if (!checked.ok) throw new Error(checked.errors.join('; '))
+  return cfg
+}
+
+/**
  * @param {{table: object, sealer: {seal: (s: string) => string, open: (s: string) => string}, now?: () => string}} deps
  */
 export function createDatasourceRegistry({ table, sealer, now = () => new Date().toISOString() }) {
@@ -57,6 +79,7 @@ export function createDatasourceRegistry({ table, sealer, now = () => new Date()
     username: row.username ?? '',
     password: row.passwordSealed ? MASK : '',
     scope: row.scope ?? {},
+    connection: row.connection ?? { status: 'unknown', checkedAt: null, error: null },
     schemaVersion: SCHEMA_VERSION,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -128,6 +151,25 @@ export function createDatasourceRegistry({ table, sealer, now = () => new Date()
         merged.updatedAt = now()
         await table.put(id, merged)
         return asView(merged)
+      })
+    },
+    /**
+     * 记录这一次真实连库的结果。未检测、已连通、连接失败都只属于数据源。
+     * @param {number|string} id
+     * @param {'ok'|'failed'} status
+     * @param {string|null} [error]
+     */
+    setConnection(id, status, error = null) {
+      return queue.run(async () => {
+        const cur = table.get(id)
+        if (!cur) throw new Error(`datasource ${id} not found`)
+        const connection = {
+          status,
+          checkedAt: now(),
+          error: status === 'failed' && error ? String(error).slice(0, 300) : null,
+        }
+        await table.put(id, { ...cur, connection })
+        return asView({ ...cur, connection })
       })
     },
     remove(id) {

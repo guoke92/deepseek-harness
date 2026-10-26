@@ -73,6 +73,23 @@ export interface CommandDefinition {
    * that payload in the session log.
    */
   readonly recordInput?: boolean
+  /**
+   * Whether `command/done` records the handler's `text`. Defaults to true.
+   * A panel RPC sets this false so the caller still receives the payload
+   * while the session log does not keep a second copy.
+   */
+  readonly recordResult?: boolean
+  /**
+   * Whether execution appends `command/run` and `command/done`. Defaults to
+   * true. A panel RPC sets this false: the caller still receives the result,
+   * and the session log stays a record of the conversation.
+   */
+  readonly recordLifecycle?: boolean
+  /**
+   * Whether discovery menus include this command. Omitted means included.
+   * A false value hides the row and leaves execution available.
+   */
+  readonly listed?: boolean
   /** Execute against the receiving agent without sending the command to the model. */
   readonly handler: (invocation: CommandInvocation) => CommandResult | Promise<CommandResult>
 }
@@ -207,12 +224,24 @@ function normalizeDefinition(definition: CommandDefinition): RegisteredCommand {
       ...('attachments' in rawInput && rawInput.attachments === true) ? { attachments: true } : {},
     })
   }
+  if (definition.listed !== undefined && typeof definition.listed !== 'boolean') {
+    throw new TypeError(`command "${definition.name}" listed flag must be a boolean`)
+  }
+  if (definition.recordResult !== undefined && typeof definition.recordResult !== 'boolean') {
+    throw new TypeError(`command "${definition.name}" recordResult flag must be a boolean`)
+  }
+  if (definition.recordLifecycle !== undefined && typeof definition.recordLifecycle !== 'boolean') {
+    throw new TypeError(`command "${definition.name}" recordLifecycle flag must be a boolean`)
+  }
   const normalized = Object.freeze({
     ...definition.definitionId === undefined ? {} : { definitionId: definition.definitionId },
     name: definition.name,
     description: definition.description,
     ...input === undefined ? {} : { input },
     ...definition.recordInput === undefined ? {} : { recordInput: definition.recordInput },
+    ...definition.recordResult === undefined ? {} : { recordResult: definition.recordResult },
+    ...definition.recordLifecycle === undefined ? {} : { recordLifecycle: definition.recordLifecycle },
+    ...definition.listed === false ? { listed: false } : {},
     handler: definition.handler,
   })
   const descriptor = Object.freeze({
@@ -220,6 +249,7 @@ function normalizeDefinition(definition: CommandDefinition): RegisteredCommand {
     name: normalized.name,
     description: normalized.description,
     ...normalized.input === undefined ? {} : { input: normalized.input },
+    ...normalized.listed === false ? { listed: false } : {},
   })
   return { definition: normalized, descriptor }
 }
@@ -370,20 +400,25 @@ export class CommandRuntime extends TypertRemoteService {
     if (command === undefined) return undefined
     if (signal.aborted) throw abortError(signal)
     const commandId = this.mintCommandId()
-    this.appendLifecycle(agent.session, 'command/run', {
-      commandId,
-      name: parsed.name,
-      ...command.definition.recordInput === false ? {} : { args: parsed.rawInput },
-      source: { kind: 'user' },
-    })
-    const settle = (result: CommandResult): CommandExecution => {
-      this.appendLifecycle(agent.session, 'command/done', {
-        commandId, kind: result.kind,
-        ...result.text === undefined ? {} : { text: result.text },
-        ...result.kind === 'success' && result.sourceEventSeq !== undefined
-          ? { sourceEventSeq: result.sourceEventSeq }
-          : {},
+    const recordLifecycle = command.definition.recordLifecycle !== false
+    if (recordLifecycle) {
+      this.appendLifecycle(agent.session, 'command/run', {
+        commandId,
+        name: parsed.name,
+        ...command.definition.recordInput === false ? {} : { args: parsed.rawInput },
+        source: { kind: 'user' },
       })
+    }
+    const settle = (result: CommandResult): CommandExecution => {
+      if (recordLifecycle) {
+        this.appendLifecycle(agent.session, 'command/done', {
+          commandId, kind: result.kind,
+          ...result.text === undefined || command.definition.recordResult === false ? {} : { text: result.text },
+          ...result.kind === 'success' && result.sourceEventSeq !== undefined
+            ? { sourceEventSeq: result.sourceEventSeq }
+            : {},
+        })
+      }
       return Object.freeze({ commandId, result: Object.freeze(result) })
     }
     let attachments: readonly (ImageBlock | FileBlock)[] = NO_ATTACHMENTS
@@ -405,7 +440,7 @@ export class CommandRuntime extends TypertRemoteService {
         if (error instanceof AttachmentError) {
           return settle({ kind: 'error', text: error.message })
         }
-        this.settleThrown(agent.session, parsed.name, commandId, error)
+        this.settleThrown(agent.session, parsed.name, commandId, error, recordLifecycle)
         throw error
       }
       // Cancellation must be honored BEFORE the handler runs: admission may
@@ -414,7 +449,7 @@ export class CommandRuntime extends TypertRemoteService {
       // image objects stay unreferenced and are deferred-GC territory.)
       const cancelledDuringAdmission = cancellationOf(signal)
       if (cancelledDuringAdmission !== undefined) {
-        this.settleThrown(agent.session, parsed.name, commandId, cancelledDuringAdmission)
+        this.settleThrown(agent.session, parsed.name, commandId, cancelledDuringAdmission, recordLifecycle)
         throw cancelledDuringAdmission
       }
     }
@@ -424,14 +459,15 @@ export class CommandRuntime extends TypertRemoteService {
       const output = command.definition.handler(invocation)
       result = normalizeResult(parsed.name, await withAbort(Promise.resolve(output), signal))
     } catch (error: unknown) {
-      this.settleThrown(agent.session, parsed.name, commandId, error)
+      this.settleThrown(agent.session, parsed.name, commandId, error, recordLifecycle)
       throw error
     }
     return settle(result)
   }
 
   /** Contained `command/done` error append for a thrown handler or admission failure. */
-  private settleThrown(session: Session, command: string, commandId: CommandId, error: unknown): void {
+  private settleThrown(session: Session, command: string, commandId: CommandId, error: unknown, recordLifecycle = true): void {
+    if (!recordLifecycle) return
     try {
       this.appendLifecycle(session, 'command/done', {
         commandId, kind: 'error',

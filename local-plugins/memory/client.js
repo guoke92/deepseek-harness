@@ -48,8 +48,8 @@ window.__ModuleLoader__.load({
     const kinds = ['profile', 'preference', 'interest', 'fact', 'task']
     const CSS = `
 .lmem { display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font-size: 14px; line-height: 22px; }
-.lmem-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 28px clamp(24px, 4vw, 48px) 0; }
-[data-platform='darwin'] .lmem-head { padding-top: calc(28px + var(--dsh-frame-top-clearance, 0px)); }
+.lmem-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px clamp(24px, 4vw, 48px) 0; }
+[data-platform='darwin'] .lmem-head { padding-top: var(--dsh-frame-top-clearance, 16px); }
 .lmem-head h1 { flex: 1; min-width: 0; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; }
 .lmem-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px clamp(24px, 4vw, 48px) 48px; }
 .lmem-column { display: flex; flex-direction: column; gap: 12px; max-width: 960px; }

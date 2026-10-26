@@ -93,8 +93,8 @@ function namesExternalData(node: unknown): boolean {
 /**
  * Parse a fence into a chart specification the component may draw.
  * @param source - Fence text.
- * @returns The specification without `usermeta`, or undefined when the text is
- * not a JSON object or names external data.
+ * @returns The specification without `usermeta` and `$schema`, or undefined when
+ * the text is not a JSON object or names external data.
  */
 function parseChartSpec(source: string): TopLevelSpec | undefined {
   let parsed: unknown
@@ -107,7 +107,10 @@ function parseChartSpec(source: string): TopLevelSpec | undefined {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
   if (namesExternalData(parsed)) return undefined
   // The JSON object is only a candidate: Vega-Lite rejects a malformed specification during compilation.
-  return Object.fromEntries(Object.entries(parsed).filter(([key]) => key !== 'usermeta')) as TopLevelSpec
+  // `$schema` names a Vega-Lite version. vega-embed warns when it disagrees with the loaded library;
+  // the embed call already sets mode to vega-lite.
+  const dropped = new Set(['usermeta', '$schema'])
+  return Object.fromEntries(Object.entries(parsed).filter(([key]) => !dropped.has(key))) as TopLevelSpec
 }
 
 /**

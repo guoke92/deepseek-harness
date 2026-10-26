@@ -16,9 +16,11 @@ export async function dispatchDatasource(api, body) {
     return { removed: await api.remove(body.id) }
   }
   if (op === 'catalog') {
-    if (body.id === undefined || body.id === null) throw new Error('id is required')
-    return await api.catalog(body.id, { database: body.database })
+    const inline = typeof body.host === 'string' && body.host.trim() !== ''
+    if ((body.id === undefined || body.id === null) && !inline) throw new Error('id is required')
+    return await api.catalog(body)
   }
+  if (op === 'check') return await api.check(body)
   if (op === 'progress') return await api.progress(body.id)
   throw new Error(`unknown datasource op: ${String(op)}`)
 }

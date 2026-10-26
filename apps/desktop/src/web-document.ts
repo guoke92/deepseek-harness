@@ -50,6 +50,35 @@ export async function authenticateWebHost(url: string): Promise<string> {
 }
 
 /**
+ * Call the owned Host with only the cookie minted for this launch.
+ * Node fetch does not store `Set-Cookie`, so the shell copies that one cookie onto the next request.
+ * The Electron session jar is not used: every launch adds another `dsh-auth-*` cookie for `127.0.0.1`,
+ * and Chromium sends all of them until the header exceeds the Host's limit.
+ * @param cookie - cookie last minted for this Host; replaced when a response mints another.
+ * @returns fetch that keeps the cookie across the launch redirect and later calls.
+ */
+export function authenticatedHostFetch(cookie: { get(): string; set(value: string): void }): typeof fetch {
+  return async (input, init) => {
+    const headers = new Headers(init?.headers)
+    const current = cookie.get()
+    if (current !== '') headers.set('cookie', current)
+    const response = await fetch(input, { ...init, headers, redirect: 'manual' })
+    if (response.status !== 303) return response
+    const issued = response.headers.get('set-cookie')
+    if (issued !== null) {
+      const end = issued.indexOf(';')
+      cookie.set(end < 0 ? issued : issued.slice(0, end))
+    }
+    await response.body?.cancel()
+    const location = response.headers.get('location')
+    const minted = cookie.get()
+    if (location === null || minted === '') return response
+    const base = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    return fetch(new URL(location, base), { headers: { cookie: minted } })
+  }
+}
+
+/**
  * Response headers not relayed to the renderer. `set-cookie` would hand the
  * Host's authentication cookie to the page's cookie jar, which the shell owns
  * instead; the rest describe the Node `fetch` connection (its encoding, length,

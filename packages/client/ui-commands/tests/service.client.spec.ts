@@ -288,6 +288,22 @@ describe('candidates', () => {
     await expect(names('zzz')).resolves.toEqual([])
   })
 
+  it('omits an unlisted host command from the menu and still reserves its name', async () => {
+    const commands: CommandDescriptor[] = [
+      { name: 'goal', description: 'g' },
+      { name: 'datasource', description: 'd', listed: false },
+    ]
+    const hidden = await bench({ commands: () => Promise.resolve({ commands }) })
+    const names = (await hidden.source.candidates(proj('s1'), req(''))).map(c => c.name)
+    expect(names).toEqual(['goal'])
+    hidden.command.register({
+      name: 'datasource',
+      available: () => true,
+      ui: { kind: 'action', run: () => {} },
+    })
+    await expect(hidden.source.candidates(proj('s1'), req(''))).rejects.toThrow('collides with a host command')
+  })
+
   it('catalogs are per session: another session pulls its own key', async () => {
     const { source, listCalls } = await bench()
     const names = (await source.candidates(proj('s2'), req(''))).map(c => c.name)

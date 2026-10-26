@@ -23,9 +23,15 @@ function stubCtx() {
 const exec = (ctx, name, args) => ctx.registered.find((t) => t.name === name).execute(args)
 const dec = (over = {}) => ({ schemaVersion: 1, action: 'new', slug: 'entity/ca_fee_order', pageType: 'entity', confidence: 0.92, rationale: '注释覆盖', evidenceRefs: ['raw_abc123'], body: '# ca_fee_order\n\n订单表。', ...over })
 
-async function withMaterial(ctx) {
+async function open(ctx) {
   const { ready } = apply(ctx)
   const svc = await ready
+  await svc.bases.create({ name: '测试', description: '' })
+  return svc
+}
+
+async function withMaterial(ctx) {
+  const svc = await open(ctx)
   const captured = await svc.materials.capture({
     sourceType: 'db', sourceRef: 'db:ds1/ca_fee_order.amount', datasourceId: 1,
     content: 'ca_fee_order.amount', evidence: {},
@@ -45,7 +51,7 @@ test('the model sees wiki read tools, material tools, collect, and one gated dec
 
 test('apply_decision rejects evidence that is not a stored material', async () => {
   const ctx = stubCtx()
-  apply(ctx)
+  await open(ctx)
   const out = JSON.parse(await exec(ctx, 'wiki_apply_decision', { decision: dec() }))
   assert.equal(out.outcome, 'rejected')
   assert.match(out.reason, /unknown evidence refs: raw_abc123/)
@@ -54,7 +60,7 @@ test('apply_decision rejects evidence that is not a stored material', async () =
 
 test('apply_decision rejects an invalid decision and writes nothing', async () => {
   const ctx = stubCtx()
-  apply(ctx)
+  await open(ctx)
   const out = JSON.parse(await exec(ctx, 'wiki_apply_decision', { decision: dec({ slug: 'Bad Name' }) }))
   assert.match(out.error, /decision invalid/)
   assert.equal(JSON.parse(await exec(ctx, 'wiki_outline', {})), '')
@@ -81,8 +87,7 @@ test('a mid-confidence model decision lands as a draft only', async () => {
 
 test('accepting a delete proposal does not remove the page', async () => {
   const ctx = stubCtx()
-  const { ready } = apply(ctx)
-  const svc = await ready
+  const svc = await open(ctx)
   const captured = await svc.materials.capture({
     sourceType: 'db', sourceRef: 'db:ds1/ca_fee_order.amount', datasourceId: 1,
     content: 'ca_fee_order.amount', evidence: {},

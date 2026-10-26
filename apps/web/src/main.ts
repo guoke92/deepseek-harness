@@ -22,8 +22,17 @@ try {
     const gate = (globalThis as { __DSH_BOOT_READY__?: PromiseWithResolvers<void> }).__DSH_BOOT_READY__
     if (gate === undefined) throw new Error('desktop web: boot readiness is missing')
     void desktop.ready().then(async ({ injections, streamBaseUrl }) => {
-      const transport = globalThis as { __DSH_TRANSPORT__?: { ownsHost: boolean; streamBaseUrl: string } }
-      transport.__DSH_TRANSPORT__ = { ownsHost: true, streamBaseUrl }
+      const transport = globalThis as {
+        __DSH_TRANSPORT__?: { ownsHost: boolean; streamBaseUrl: string; fetch: typeof globalThis.fetch }
+      }
+      // Chromium's EventSource on dsh-app reports net::ERR_FAILED after HTTP 200.
+      // Plugin reload reads the same stream through the page fetch, which stays open.
+      // Connection RPC already defaults to this fetch, so naming it does not change those calls.
+      transport.__DSH_TRANSPORT__ = {
+        ownsHost: true,
+        streamBaseUrl,
+        fetch: (input, init) => globalThis.fetch(input, init),
+      }
       await applyIndexInjections(injections, src => new Promise<void>((resolve, reject) => {
         const script = document.createElement('script')
         script.src = src

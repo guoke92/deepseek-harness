@@ -4,8 +4,8 @@ export const SOURCE_TYPES = Object.freeze(['db', 'code', 'sql', 'doc', 'conversa
 export const MATERIAL_STATUS = Object.freeze(['captured', 'decided', 'failed'])
 export const DATASOURCE_TYPES = Object.freeze(['postgresql', 'mysql'])
 
-/** 流水线可自动创建的页面类型；synthesis 与 comparison 只允许人或 agent 手写。 */
-export const PIPELINE_PAGE_TYPES = Object.freeze(['entity', 'concept', 'summary', 'index'])
+/** 流水线可自动创建的页面类型；synthesis 与 comparison 只允许人或 agent 手写。relation 是表关联，不是概念。 */
+export const PIPELINE_PAGE_TYPES = Object.freeze(['entity', 'concept', 'relation', 'summary', 'index'])
 export const HAND_WRITTEN_PAGE_TYPES = Object.freeze(['synthesis', 'comparison'])
 export const PAGE_TYPES = Object.freeze([...PIPELINE_PAGE_TYPES, ...HAND_WRITTEN_PAGE_TYPES])
 

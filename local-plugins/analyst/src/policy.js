@@ -35,9 +35,10 @@ export function clipOutline(outline, maxChars) {
 /**
  * 生成系统提示词片段（只含策略驱动的约束，不含业务事实）。
  * @param {object} policy 已合并的完整策略
- * @param {{outline?: string, datasourceId?: number|null}} ctx
+ * @param {{outline?: string, datasourceId?: number|null, sources?: string}} ctx
+ * `sources` 是当前知识库已绑定的数据源和已选表，由调用方填入。
  */
-export function buildQueryPrompt(policy, { outline = '', datasourceId = null } = {}) {
+export function buildQueryPrompt(policy, { outline = '', datasourceId = null, sources = '' } = {}) {
   const q = policy.query
   const lines = []
   lines.push('你是问数助手。回答前遵循以下约束：')
@@ -47,15 +48,15 @@ export function buildQueryPrompt(policy, { outline = '', datasourceId = null } =
   }
 
   lines.push('', '【检索与口径】')
-  lines.push('- 先用 wiki_search 与 wiki_read_page 检索页面；没有页面时改读 wiki_list_materials 与 wiki_get_material，并说明口径尚未编译。')
+  lines.push('- 先用 wiki_search 与 wiki_read_page 检索当前知识库的页面；没有页面时改读 wiki_list_materials 与 wiki_get_material，并说明口径尚未编译。表、字段和口径以这些页面和原料为准。')
+  if (sources) lines.push('', '【当前知识库的数据源】', sources, '- 只查询上面列出的数据源。表必须落在该数据源已选范围内；范围写成「连接库中的表」时，查询停在这个数据源的连接库。')
   lines.push('- 已发布口径可直接使用，草稿口径必须在回答中注明"草稿口径，未审核"。')
   if (!q.retrieval.includeDrafts) lines.push('- 当前策略不使用草稿口径，检索结果只来自已发布页面。')
+  lines.push('- 用户要的业务概念在当前知识库的页面、字段和字典里都对不上时，第一句说明当前知识库答不了，只追问它对应哪张表、哪个字段。不要用相近字段、日志或 JSON 里的人名代替，不要为了寻找替代口径执行 SQL，也不要先给汇总表或图。')
 
   lines.push('', '【澄清】')
   if (q.clarify.requireWhen.length > 0) {
     lines.push(`- 遇到以下情况先追问，不得臆断：${q.clarify.requireWhen.join('；')}。`)
-  } else {
-    lines.push('- 当前策略未设置必须追问的情况；口径不明确时说明假设。')
   }
   lines.push(`- 每轮追问不超过 ${q.clarify.maxQuestions} 个问题。`)
 
@@ -63,9 +64,9 @@ export function buildQueryPrompt(policy, { outline = '', datasourceId = null } =
   lines.push('- 生成 SQL 后，校验字符串字面值是否落在被引用的字段上；若只落在未引用字段，改写 SQL 后再执行。')
 
   lines.push('', '【输出】')
-  lines.push(`- 先给一句结论。`)
-  if (q.output.tables) lines.push('- 结果以 Markdown 表格展示。')
-  if (q.output.chart === 'auto') lines.push('- 适合对比或占比时，用 ```vega-lite 代码块（完整 JSON 规范）给出图表。')
+  lines.push('- 口径已经对上页面或字段之后，先给一句结论。')
+  if (q.output.tables) lines.push('- 这时用 Markdown 表格展示结果。对不上口径时不要输出替代统计的表格。')
+  if (q.output.chart === 'auto') lines.push('- 这时如果适合对比或占比，再用 ```vega-lite 代码块（完整 JSON 规范）给出图表。对不上口径时不要为替代统计画图。')
   if (q.output.showCaliber) lines.push('- 注明口径（引用的 wiki 页面 id 与口径标签）。')
   if (q.output.showSql) lines.push('- 注明执行的 SQL。')
   lines.push(`- 金额单位：${q.output.moneyUnit}。`)
@@ -73,6 +74,7 @@ export function buildQueryPrompt(policy, { outline = '', datasourceId = null } =
 
   lines.push('', '【安全】')
   lines.push('- 只执行只读 SELECT，单条语句。')
+  lines.push('- 查询只使用当前知识库绑定的数据源，并且只访问该数据源在这个知识库里选择的表。')
   lines.push(`- 结果最多 ${q.safety.maxRows} 行。`)
   if (q.safety.forbiddenTables.length) lines.push(`- 禁止访问的表：${q.safety.forbiddenTables.join('、')}。`)
   if (q.safety.forbiddenColumns.length) lines.push(`- 禁止返回的字段：${q.safety.forbiddenColumns.join('、')}。`)

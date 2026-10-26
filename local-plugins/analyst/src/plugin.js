@@ -14,12 +14,42 @@ export const inject = ['tools', 'systemPrompt', 'localDatasource', 'localWiki']
 export function apply(ctx) {
   let policy = defaultPolicy()
   let lastRun = null
+  let sourceBrief = '当前知识库还在读取。'
   const safetyOf = () => policy.query.safety
+
+  if (typeof ctx.tools.restrict === 'function') {
+    ctx.effect(() => ctx.tools.restrict({ deny: ['datasource_list', 'datasource_add'] }), 'analyst.datasourceTools')
+  }
+
+  async function refreshSources() {
+    try {
+      const bound = await ctx.localWiki.boundSources()
+      const lines = bound.sources.map((source) => {
+        const tables = source.tables?.length ? source.tables.join('、') : '连接库中的表'
+        const name = source.name || '未命名'
+        return `- ${source.id} ${name}（${source.type || '未知类型'}）：${tables}`
+      })
+      sourceBrief = [
+        `当前知识库：${bound.name}（${bound.id}）`,
+        lines.length ? `可查询的数据源和已选表：\n${lines.join('\n')}` : '还没有绑定数据源。',
+        '只查询这些数据源。表必须落在已选范围内。范围写成「连接库中的表」时，查询停在该数据源的连接库。',
+      ].join('\n')
+    } catch (err) {
+      sourceBrief = `当前没有可用的知识库：${String(err?.message ?? err)}`
+    }
+  }
 
   ctx.systemPrompt.section({
     name: 'analyst:policy',
     order: ctx.systemPrompt.getSectionOrder('DELIVERABLE_FILE_REFERENCES') + 2,
     text: () => buildQueryPrompt(policy, {}),
+  })
+  ctx.systemPrompt.context({
+    name: 'analyst:knowledge-base',
+    order: 130,
+    required: true,
+    interpolate: false,
+    text: () => sourceBrief,
   })
 
   const api = {
@@ -32,19 +62,18 @@ export function apply(ctx) {
       return policy
     },
     /**
-     * 先做字面值校验，rewrite 时不执行。unmatched 不阻断（索引只覆盖 topK）。
+     * 先确认数据源属于当前知识库，再用该库原料做字面值校验。rewrite 时不执行。
+     * SQL 的表范围交给 runReadonly 的 allowedTables，与只读守卫是同一处检查。
      * @param {{datasourceId: number, sql: string, referencedFields: string[], maxRows?: number}} args
      */
     async execute(args) {
       if (!Array.isArray(args.referencedFields)) throw new Error('referencedFields is required before execution')
-      const materials = await ctx.localWiki.listMaterials()
-      const profiles = []
-      for (const item of materials) {
-        const match = /([^/]+)\.([^./]+)$/.exec(String(item.sourceRef ?? ''))
-        if (!match) continue
-        const table = match[1].includes('.') ? match[1].split('.').pop() : match[1]
-        profiles.push({ table, column: match[2], topK: item.evidence?.topK ?? [] })
-      }
+      const bound = await ctx.localWiki.boundSources()
+      const source = bound.sources.find((item) => item.id === Number(args.datasourceId))
+      if (!source) throw new Error('datasource is not bound to this knowledge base')
+      const materials = (await ctx.localWiki.listMaterials(bound.id))
+        .filter((item) => item.datasourceId == null || Number(item.datasourceId) === source.id)
+      const profiles = materials.flatMap(profilesFromMaterial)
       const literals = checkLiterals({
         sql: args.sql,
         referencedFields: args.referencedFields,
@@ -59,6 +88,7 @@ export function apply(ctx) {
         maxRows: args.maxRows ?? safety.maxRows,
         forbiddenTables: safety.forbiddenTables,
         forbiddenColumns: safety.forbiddenColumns,
+        allowedTables: source.tables,
       })
       lastRun = {
         datasourceId: args.datasourceId,
@@ -80,6 +110,7 @@ export function apply(ctx) {
 
   if (typeof ctx.on === 'function') {
     ctx.on('agent/pre-step', async (payload, next) => {
+      await refreshSources()
       const decision = await next()
       try {
         for (const message of payload?.messages ?? []) {
@@ -103,11 +134,11 @@ export function apply(ctx) {
 
   ctx.tools.register({
     name: 'analyst_execute_readonly',
-    description: '在数据源上执行一条只读 SELECT。必须给出 referencedFields（table.column）。字面值若只落在未引用字段上则拒绝执行。禁用表和列来自问数策略。',
+    description: '对当前知识库已绑定的数据源执行一条只读 SELECT。表必须落在该知识库为这个数据源选择的范围内。必须给出 referencedFields（table.column）。字面值若只落在未引用字段上则拒绝执行。禁用表和列来自问数策略。',
     parameters: {
       type: 'object',
       properties: {
-        datasourceId: { type: 'number', description: '数据源 id' },
+        datasourceId: { type: 'number', description: '当前知识库已绑定的数据源 id' },
         sql: { type: 'string', description: '单条 SELECT 或 WITH ... SELECT' },
         referencedFields: { type: 'array', items: { type: 'string' }, description: 'SQL 引用的字段，形如 table.column' },
         maxRows: { type: 'number', description: '最大返回行数，默认取策略值，上限 1000' },
@@ -129,6 +160,23 @@ export function apply(ctx) {
   })
 
   return api
+}
+
+function profilesFromMaterial(item) {
+  if (item.evidence?.kind === 'db.table' && Array.isArray(item.evidence.columns)) {
+    const table = String(item.evidence.table ?? '').split('.').pop()
+    return item.evidence.columns.map((column) => ({
+      table,
+      column: column.name,
+      topK: Array.isArray(column.domain?.values)
+        ? column.domain.values.map((value) => ({ value: value.value, count: value.count }))
+        : [],
+    }))
+  }
+  const match = /([^/]+)\.([^./]+)$/.exec(String(item.sourceRef ?? ''))
+  if (!match) return []
+  const table = match[1].includes('.') ? match[1].split('.').pop() : match[1]
+  return [{ table, column: match[2], topK: item.evidence?.topK ?? [] }]
 }
 
 function textOf(message) {

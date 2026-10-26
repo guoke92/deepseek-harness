@@ -71,6 +71,16 @@ test('forbidden tables are matched case-insensitively and across schema qualifie
   allowed('select * from public.other_t', 'postgresql', { forbiddenTables: ['secret_t'] })
 })
 
+test('allowed tables keep the query inside the selected scope', () => {
+  const scope = { allowedTables: ['lowcode_pplatform.ca_fee_order', 'cust_company_info'] }
+  allowed('select * from ca_fee_order', 'mysql', scope)
+  allowed('select * from other.cust_company_info', 'mysql', scope)
+  denied('select * from ca_fee_company', 'mysql', scope)
+  denied('select * from ca_fee_order join secret_t on true', 'mysql', scope)
+  allowed('select 1', 'mysql', { allowedTables: [] })
+  denied('select * from ca_fee_order', 'mysql', { allowedTables: [] })
+})
+
 test('forbidden columns are rejected when referenced', () => {
   denied('select id, phone from cust', 'postgresql', { forbiddenColumns: ['phone'] })
   allowed('select id from cust', 'postgresql', { forbiddenColumns: ['phone'] })

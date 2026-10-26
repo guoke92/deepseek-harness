@@ -64,12 +64,14 @@ test('material input rejects credentials in evidence and oversized content', () 
   bad(c.validateMaterialInput(withMat({ sourceRef: '' })))
 })
 
-test('materialIdempotencyKey is stable for the same source and content hash', () => {
+test('materialIdempotencyKey follows the knowledge base and source, not the content hash', () => {
   const a = c.materialIdempotencyKey({ sourceType: 'db', sourceRef: 'x', contentHash: sha })
-  const b = c.materialIdempotencyKey({ sourceType: 'db', sourceRef: 'x', contentHash: sha })
-  const d = c.materialIdempotencyKey({ sourceType: 'db', sourceRef: 'x', contentHash: 'b'.repeat(64) })
-  assert.equal(a, b)
-  assert.notEqual(a, d)
+  const b = c.materialIdempotencyKey({ knowledgeBaseId: 'kb_a', sourceType: 'db', sourceRef: 'x', contentHash: sha })
+  const same = c.materialIdempotencyKey({ sourceType: 'db', sourceRef: 'x', contentHash: 'b'.repeat(64) })
+  const other = c.materialIdempotencyKey({ sourceType: 'db', sourceRef: 'y', contentHash: sha })
+  assert.equal(a, same)
+  assert.notEqual(a, b)
+  assert.notEqual(a, other)
 })
 
 test('Decision new needs body, slug and pageType; must not carry a patch', () => {
@@ -141,13 +143,14 @@ test('WikiPage: published content and draft are fields of one record, status mus
   bad(c.validateWikiPage({ ...page, published: { ...page.published, editSource: 'bot' } }))
 })
 
-test('WikiPage allows hand-written synthesis and comparison types; pipeline types are the four automatic ones', () => {
+test('WikiPage allows hand-written synthesis and comparison types; pipeline types include relation', () => {
   ok(c.validateWikiPage({ ...page, pageType: 'synthesis' }))
   ok(c.validateWikiPage({ ...page, pageType: 'comparison' }))
   ok(c.validateWikiPage({ ...page, pageType: 'index', slug: 'index' }))
   ok(c.validateWikiPage({ ...page, pageType: 'summary', slug: 'summary/ds3' }))
   ok(c.validateWikiPage({ ...page, pageType: 'concept', slug: 'concept/order_status' }))
-  assert.deepEqual(c.PIPELINE_PAGE_TYPES, ['entity', 'concept', 'summary', 'index'])
+  ok(c.validateWikiPage({ ...page, pageType: 'relation', slug: 'relation/order_company_link' }))
+  assert.deepEqual(c.PIPELINE_PAGE_TYPES, ['entity', 'concept', 'relation', 'summary', 'index'])
 })
 
 test('PageRevision: positive version, known source, full snapshot required', () => {
@@ -231,6 +234,6 @@ test('validatePolicyScope accepts global or datasource:<id> only', () => {
 })
 
 test('enum exports include both the pipeline and hand-written page types', () => {
-  assert.deepEqual(c.PAGE_TYPES, ['entity', 'concept', 'summary', 'index', 'synthesis', 'comparison'])
+  assert.deepEqual(c.PAGE_TYPES, ['entity', 'concept', 'relation', 'summary', 'index', 'synthesis', 'comparison'])
   assert.deepEqual(c.SOURCE_TYPES, ['db', 'code', 'sql', 'doc', 'conversation'])
 })

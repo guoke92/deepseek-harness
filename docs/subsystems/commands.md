@@ -47,6 +47,23 @@ interface CommandDefinition {
    * that payload in the session log.
    */
   readonly recordInput?: boolean
+  /**
+   * Whether `command/done` records the handler's `text`. Defaults to true.
+   * A panel RPC sets this false so the caller still receives the payload
+   * while the session log does not keep a second copy.
+   */
+  readonly recordResult?: boolean
+  /**
+   * Whether execution appends `command/run` and `command/done`. Defaults to
+   * true. A panel RPC sets this false: the caller still receives the result,
+   * and the session log stays a record of the conversation.
+   */
+  readonly recordLifecycle?: boolean
+  /**
+   * Whether discovery menus include this command. Omitted means included.
+   * A false value hides the row and leaves execution available.
+   */
+  readonly listed?: boolean
   /** Execute against the receiving agent without sending the command to the model. */
   readonly handler: (invocation: CommandInvocation) => CommandResult | Promise<CommandResult>
 }
@@ -94,7 +111,7 @@ type CommandResult =
 
 ## Discovery and parsing views
 
-Adapters receive handler-free immutable descriptors after scope resolution. `parseCommand()` returns `ParsedCommand` before registry resolution; syntax-valid input can still name an unavailable command.
+Adapters receive handler-free immutable descriptors after scope resolution. `parseCommand()` returns `ParsedCommand` before registry resolution; syntax-valid input can still name an unavailable command. `listed: false` omits the command from discovery menus and leaves execution available.
 
 ```ts type-equiv
 /** Handler-free immutable command view returned to UI adapters. */
@@ -107,6 +124,11 @@ interface CommandDescriptor {
   readonly description: string
   /** Optional free-form input hint advertised to capable clients. */
   readonly input?: CommandInputDescriptor
+  /**
+   * Whether discovery menus include this command. Omitted means included.
+   * A false value hides the row and leaves execution available.
+   */
+  readonly listed?: boolean
 }
 ```
 

@@ -27,6 +27,11 @@ it('forwards client initialization failures to native recovery', async () => {
   await import('../src/main.ts')
   await gate.promise
   expect(boot.applyIndexInjections).toHaveBeenCalledWith([], expect.any(Function))
+  const transport = (globalThis as {
+    __DSH_TRANSPORT__?: { ownsHost?: boolean; streamBaseUrl?: string; fetch?: unknown }
+  }).__DSH_TRANSPORT__
+  expect(transport).toMatchObject({ ownsHost: true, streamBaseUrl: 'http://127.0.0.1:3080' })
+  expect(typeof transport?.fetch).toBe('function')
   const report = boot.run.mock.calls[0]![0] as (reason: unknown) => void
   report(new Error('client plugin activation failed'))
   expect(failed).toHaveBeenCalledWith('client plugin activation failed')

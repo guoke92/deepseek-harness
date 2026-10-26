@@ -1,29 +1,19 @@
 /**
- * 把列剖析变成 wiki 可接收的原料投递（尚未分配 id）。
- * 数据源插件不保存原料；wiki 调用 collect 后自己追加。
+ * 把 db.table 证据包成 wiki 可接收的原料。正文只调用 contracts 的渲染。
  */
-import { describeProfile } from './pipeline.js'
+import { renderDbTable } from '@local/contracts'
 
 /**
- * @param {object} profile buildProfile 的一条结果
+ * @param {object} evidence validateDbTableEvidence 接受的证据
  * @param {number} datasourceId
  * @returns {{sourceType: 'db', sourceRef: string, datasourceId: number, content: string, evidence: object}}
  */
-export function materialFromProfile(profile, datasourceId) {
+export function tableMaterial(evidence, datasourceId) {
   return {
     sourceType: 'db',
-    sourceRef: `db:ds${datasourceId}/${profile.table}.${profile.column}`,
+    sourceRef: `db:ds${datasourceId}/${evidence.table}`,
     datasourceId,
-    content: describeProfile(profile),
-    evidence: {
-      rowCount: profile.rowCount,
-      nullCount: profile.nullCount,
-      distinctCount: profile.distinctCount,
-      distinctApprox: profile.distinctApprox,
-      skipReason: profile.skipReason,
-      excludedDefaults: profile.excludedDefaults,
-      topK: (profile.topK ?? []).slice(0, 5),
-      dataType: profile.dataType,
-    },
+    content: renderDbTable(evidence),
+    evidence,
   }
 }

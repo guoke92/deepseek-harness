@@ -43,7 +43,7 @@ ctx.commands.register({
 })
 ```
 
-处理器返回 `success` 或 `error`，并可附带由适配器渲染的 UI 文本。`recordInput` 默认为 true；若载荷由命令自己的权威领域事件持有，命令会将 `recordInput` 设为 false，避免会话日志重复记录该输入。同一作用域内重复注册同名命令会抛出异常。
+处理器返回 `success` 或 `error`，并可附带由适配器渲染的 UI 文本。`recordInput` 默认为 true；若载荷由命令自己的权威领域事件持有，命令会将 `recordInput` 设为 false，避免会话日志重复记录该输入。`recordResult` 默认为 true；面板 RPC 设为 false 时，调用方仍收到 `text`，`command/done` 不再保存这份副本。`recordLifecycle` 默认为 true；面板 RPC 设为 false 时，调用方仍收到结果，但不会写入 `command/run` 或 `command/done`。`listed` 默认列入发现菜单；设为 false 时命令仍可执行，但不会出现在发现菜单里。同一作用域内重复注册同名命令会抛出异常。
 
 ### 命令语法
 

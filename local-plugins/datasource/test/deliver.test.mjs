@@ -1,48 +1,40 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { materialFromProfile } from '../src/deliver.js'
-import { describeProfile } from '../src/pipeline.js'
+import { tableMaterial } from '../src/deliver.js'
 import { validateMaterialInput } from '@local/contracts'
-import { triageDict } from '../src/dict-triage.js'
 
-const profile = {
-  table: 'ca_fee_order', column: 'order_status', rowCount: 50, nullCount: 0, distinctCount: 2,
-  distinctApprox: false, isDictLike: true, skipReason: null, excludedDefaults: [],
-  topK: [{ value: 'PAID', count: 30 }, { value: 'CLOSED', count: 20 }], dataType: 'varchar',
-}
-
-test('a profile becomes a valid db material with a stable source reference and no credentials', () => {
-  const m = materialFromProfile(profile, 3)
-  assert.equal(m.sourceRef, 'db:ds3/ca_fee_order.order_status')
-  assert.equal(m.datasourceId, 3)
-  assert.equal(validateMaterialInput(m).ok, true)
-  assert.match(m.content, /行数 50/)
-  assert.match(m.content, /低基数，候选字典/)
-})
-
-test('description lists at most five frequent values and marks skipped relations', () => {
-  const many = { ...profile, topK: Array.from({ length: 8 }, (_, i) => ({ value: `V${i}`, count: 1 })), skipReason: 'json', isDictLike: false }
-  const text = describeProfile(many)
-  assert.match(text, /V4/)
-  assert.doesNotMatch(text, /V5/)
-  assert.match(text, /跳过关联（json）/)
-})
-
-test('approximate distinct counts are marked', () => {
-  assert.match(describeProfile({ ...profile, distinctApprox: true }), /不同值 2（近似）/)
-})
-
-test('dict triage keeps a short-code column and holds a single-value column', () => {
-  const keep = triageDict({ left: { table: 't', column: 'order_status' }, evidence: { topK: [{ value: 'PAID' }, { value: 'CLOSED' }], distinctCount: 2 } }, {})
-  assert.equal(keep.decision, 'keep')
-  const hold = triageDict({ left: { table: 't', column: 'flag_x' }, evidence: { topK: [{ value: 'Y' }], distinctCount: 1 } }, {})
-  assert.equal(hold.decision, 'hold')
-  const drop = triageDict({ left: { table: 't', column: 'customer_id' }, evidence: { topK: [{ value: '1' }], distinctCount: 1 } }, {})
-  assert.equal(drop.decision, 'drop')
-})
-
-test('a skipped low-cardinality column is not described as a dictionary candidate', () => {
-  const text = describeProfile({ ...profile, isDictLike: true, skipReason: 'temporal', topK: [{ value: '2026-10-14', count: 50 }] })
-  assert.match(text, /跳过关联（temporal）/)
-  assert.doesNotMatch(text, /候选字典/)
+test('a table document becomes one db material', () => {
+  const evidence = {
+    kind: 'db.table',
+    table: 'ca_fee_order',
+    comment: null,
+    rowCount: 2,
+    sampleRows: 2,
+    sampleMode: 'physical-prefix',
+    primaryKey: [],
+    indexes: [],
+    declaredForeignKeys: [],
+    relations: [],
+    terms: [],
+    columns: [
+      {
+        name: 'order_status', dataType: 'varchar(16)', nullable: false, defaultValue: null, comment: '订单状态',
+        role: 'enum', nullCount: 0, nonNullCount: 2, distinctCount: 2, distinctApprox: false, sampleRows: 2,
+        domain: { kind: 'values', values: [{ value: 'PAID', count: 1, share: 0.5 }] }, dictionary: true,
+      },
+      {
+        name: 'annual_fee', dataType: 'decimal(10,2)', nullable: true, defaultValue: null, comment: '年费',
+        role: 'measure', nullCount: 0, nonNullCount: 2, distinctCount: 2, distinctApprox: false, sampleRows: 2,
+        domain: { kind: 'range', min: '1', max: '2' }, dictionary: false,
+      },
+    ],
+  }
+  const material = tableMaterial(evidence, 3)
+  assert.equal(material.sourceRef, 'db:ds3/ca_fee_order')
+  assert.equal(validateMaterialInput(material).ok, true, validateMaterialInput(material).errors.join('; '))
+  assert.match(material.content, /\| order_status \|/)
+  assert.match(material.content, /\| annual_fee \|/)
+  assert.match(material.content, /字典 \[\[concept\/ca_fee_order_order_status\]\]/)
+  assert.match(material.content, /1 \.\. 2/)
+  assert.match(material.content, /订单状态/)
 })

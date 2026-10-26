@@ -82,6 +82,17 @@ describe('VegaLiteBlock', () => {
     expect(embedChart.mock.calls[0]?.[1]).not.toHaveProperty('usermeta')
   })
 
+  it('drops $schema before embedding, so an older Vega-Lite schema does not warn against the loaded library', async () => {
+    embedChart.mockResolvedValue(chartResult())
+    const withSchema = JSON.stringify({
+      $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+      ...JSON.parse(barChart),
+    })
+    render(<VegaLiteBlock source={withSchema} fallback={null} />)
+    await waitFor(() => { expect(embedChart).toHaveBeenCalledOnce() })
+    expect(embedChart.mock.calls[0]?.[1]).not.toHaveProperty('$schema')
+  })
+
   it('shows the source fallback until the chart is drawn, then replaces it', async () => {
     let finish: (result: Result) => void = () => {}
     embedChart.mockReturnValue(new Promise((resolve) => { finish = resolve }))
