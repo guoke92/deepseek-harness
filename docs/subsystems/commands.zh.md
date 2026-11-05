@@ -47,6 +47,23 @@ interface CommandDefinition {
    * that payload in the session log.
    */
   readonly recordInput?: boolean
+  /**
+   * Whether `command/done` records the handler's `text`. Defaults to true.
+   * A panel RPC sets this false so the caller still receives the payload
+   * while the session log does not keep a second copy.
+   */
+  readonly recordResult?: boolean
+  /**
+   * Whether execution appends `command/run` and `command/done`. Defaults to
+   * true. A panel RPC sets this false: the caller still receives the result,
+   * and the session log stays a record of the conversation.
+   */
+  readonly recordLifecycle?: boolean
+  /**
+   * Whether discovery menus include this command. Omitted means included.
+   * A false value hides the row and leaves execution available.
+   */
+  readonly listed?: boolean
   /** Execute against the receiving agent without sending the command to the model. */
   readonly handler: (invocation: CommandInvocation) => CommandResult | Promise<CommandResult>
 }
@@ -94,7 +111,7 @@ type CommandResult =
 
 ## 发现与解析视图
 
-作用域解析后，适配器会获得不含处理器的不可变描述符。`parseCommand()` 在注册表解析前返回 `ParsedCommand`；语法有效的输入仍可能指向不可用的命令。
+作用域解析后，适配器会获得不含处理器的不可变描述符。`parseCommand()` 在注册表解析前返回 `ParsedCommand`；语法有效的输入仍可能指向不可用的命令。`listed: false` 会把命令从发现菜单中去掉，执行仍然可用。
 
 ```ts type-equiv
 /** Handler-free immutable command view returned to UI adapters. */
@@ -107,6 +124,11 @@ interface CommandDescriptor {
   readonly description: string
   /** Optional free-form input hint advertised to capable clients. */
   readonly input?: CommandInputDescriptor
+  /**
+   * Whether discovery menus include this command. Omitted means included.
+   * A false value hides the row and leaves execution available.
+   */
+  readonly listed?: boolean
 }
 ```
 

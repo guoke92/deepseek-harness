@@ -1,0 +1,7 @@
+# @local/memory: resident long-term memory (profile / preference / interest) injected
+# into the system prompt, plus memory_add and memory_list tools. Inserted after the
+# base layer so storage-domain and systemPrompt exist. The service has no Config.
+- insert:
+    - id: local-memory
+      name: '@local/memory'
+      config: {}

@@ -80,6 +80,19 @@ describe('CommandRuntime', () => {
     expect(ctx.commands.find(agent, 'missing')).toBeUndefined()
   })
 
+  it('omits a listed command from the descriptor unless the flag is false, and still executes it', async () => {
+    const ctx = await mount()
+    const { agent } = await mintAgentScope(ctx, 'listed')
+    ctx.commands.register({ ...command('visible'), listed: true })
+    ctx.commands.register({ ...command('panel'), listed: false })
+    const byName = new Map(ctx.commands.list(agent).map(descriptor => [descriptor.name, descriptor]))
+    expect(byName.get('visible')).not.toHaveProperty('listed')
+    expect(byName.get('panel')).toMatchObject({ name: 'panel', listed: false })
+    await expect(ctx.commands.execute(agent, '/panel', [], new AbortController().signal)).resolves.toMatchObject({
+      result: { kind: 'success', text: 'ran:panel' },
+    })
+  })
+
   it('sorts distinct effective command names', async () => {
     const ctx = await mount()
     const { agent } = await mintAgentScope(ctx, 'a')
@@ -141,7 +154,6 @@ describe('CommandRuntime', () => {
 
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
     ctx.on('commands/change', () => { throw new Error('observer threw') })
-    // oxlint-disable-next-line typescript/no-misused-promises -- exercises rejected-listener containment
     ctx.on('commands/change', () => Promise.reject(new Error('observer rejected')))
     const afterFailures = vi.fn()
     ctx.on('commands/change', afterFailures)
@@ -234,7 +246,6 @@ describe('CommandRuntime', () => {
     ctx.commands.register({
       name: 'reject-value',
       description: 'Reject a non-Error value',
-      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- exercise untyped plugin normalization
       handler: () => Promise.reject('not an Error'),
     })
     await expect(ctx.commands.execute(agent, '/reject-value', [], new AbortController().signal))
@@ -244,7 +255,6 @@ describe('CommandRuntime', () => {
     ctx.commands.register({
       name: 'reject-hostile',
       description: 'Reject an unrenderable value',
-      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- exercise hostile plugin normalization
       handler: () => Promise.reject(hostile),
     })
     await expect(ctx.commands.execute(agent, '/reject-hostile', [], new AbortController().signal))
@@ -361,6 +371,40 @@ describe('CommandRuntime', () => {
     const run = agent.session.snapshotEvents().find(event => event.type === 'command/run')
     expect(run?.type).toBe('command/run')
     expect(run?.type === 'command/run' && Object.hasOwn(run.data, 'args')).toBe(false)
+  })
+
+  it('returns handler text to the caller and omits it from command/done when recordResult is false', async () => {
+    const ctx = await mount()
+    const { agent } = await mintAgentScope(ctx, 'a')
+    ctx.commands.register({
+      name: 'panel',
+      description: 'Panel payload',
+      recordResult: false,
+      handler: () => ({ kind: 'success', text: '{"bases":[]}' }),
+    })
+
+    const execution = await ctx.commands.execute(agent, '/panel', [], new AbortController().signal)
+
+    expect(execution?.result).toEqual({ kind: 'success', text: '{"bases":[]}' })
+    const done = agent.session.snapshotEvents().find(event => event.type === 'command/done')
+    expect(done?.type).toBe('command/done')
+    expect(done?.type === 'command/done' && Object.hasOwn(done.data, 'text')).toBe(false)
+  })
+
+  it('returns the handler result and writes no session events when recordLifecycle is false', async () => {
+    const ctx = await mount()
+    const { agent } = await mintAgentScope(ctx, 'a')
+    ctx.commands.register({
+      name: 'panel',
+      description: 'Panel payload',
+      recordLifecycle: false,
+      handler: () => ({ kind: 'success', text: '{"bases":[]}' }),
+    })
+
+    const execution = await ctx.commands.execute(agent, '/panel', [], new AbortController().signal)
+
+    expect(execution?.result).toEqual({ kind: 'success', text: '{"bases":[]}' })
+    expect(agent.session.snapshotEvents().some(event => event.type === 'command/run' || event.type === 'command/done')).toBe(false)
   })
 
   it('mints distinct monotonic commandIds across executions', async () => {

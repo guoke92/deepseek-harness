@@ -1,0 +1,6 @@
+# @local/datasource: host service localDatasource. Inserted after the base layer
+# so storage-domain exists. Wiki and the analyst preset inject this service.
+- insert:
+    - id: local-datasource
+      name: '@local/datasource'
+      config: {}

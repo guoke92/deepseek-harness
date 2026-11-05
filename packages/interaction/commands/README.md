@@ -43,7 +43,7 @@ ctx.commands.register({
 })
 ```
 
-The handler returns `success` or `error` plus optional UI text that the adapter renders. `recordInput` defaults to true; a command whose own authoritative domain event already carries the payload sets it to false so the session log does not duplicate the input. Registering the same name twice in one scope throws.
+The handler returns `success` or `error` plus optional UI text that the adapter renders. `recordInput` defaults to true; a command whose own authoritative domain event already carries the payload sets it to false so the session log does not duplicate the input. `recordResult` defaults to true; a panel RPC sets it to false so the caller still receives `text` while `command/done` omits that copy. `recordLifecycle` defaults to true; a panel RPC sets it to false so execution returns the result without appending `command/run` or `command/done`. `listed` defaults to included; set it false to keep execution available while omitting the command from discovery menus. Registering the same name twice in one scope throws.
 
 ### Command syntax
 
@@ -60,8 +60,6 @@ A command may declare `input.attachments` to accept composer images and generic 
 ### Dispatching from an adapter
 
 An interactive adapter calls `execute(agent, line, attachments, signal)` with the exact receiving agent, the full command line, and the submission's ordered attachments. It returns the settled `CommandExecution` — the normalized result plus its lifecycle `commandId` — or `undefined` for invalid syntax or an unknown name. `list(agent)` and `find(agent, name)` serve discovery after agent-scoped shadowing.
-
-The stateless `@deepseek-ai/dsh-commands/builtin` entry shares first-party identity, English/Chinese input tokens, and descriptor resolution across Host and Client adapters. `builtinCommandName()` identifies the definition independently of its registered name; `resolveCommand()` preserves exact-name priority and follows aliases by definition ID. Adapters choose their supported subset; the registry itself continues to accept arbitrary definitions.
 
 ### Cancellation
 
@@ -84,7 +82,6 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 | [`src/index.ts`](src/index.ts) | `CommandRuntime` service: registration, scoping, dispatch, lifecycle events |
 | [`src/types.ts`](src/types.ts) | Command definition, descriptor, execution, and result types |
 | [`src/brand.ts`](src/brand.ts) | Stable command-definition identities and per-execution lifecycle ids |
-| [`src/builtin.ts`](src/builtin.ts) | First-party identity and token resolution for Host and Client adapters |
 
 ### Lifecycle events
 

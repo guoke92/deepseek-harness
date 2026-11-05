@@ -63,6 +63,11 @@ export interface CommandDescriptor {
   readonly description: string
   /** Optional free-form input hint advertised to capable clients. */
   readonly input?: CommandInputDescriptor
+  /**
+   * Whether discovery menus include this command. Omitted means included.
+   * A false value hides the row and leaves execution available.
+   */
+  readonly listed?: boolean
 }
 
 /**

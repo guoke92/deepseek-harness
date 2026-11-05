@@ -1,0 +1,30 @@
+{
+  "name": "@local/analyst",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "数据分析问数：预设、字面值校验、按策略执行只读 SQL，并把确认结果沉淀回 wiki 原料。",
+  "exports": {
+    ".": "./src/plugin.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "src/**/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dependencies": {
+    "@local/contracts": "file:../contracts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

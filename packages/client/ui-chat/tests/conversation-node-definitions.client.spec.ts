@@ -416,6 +416,22 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('keeps knowledge panel commands out of visible chat order', () => {
+    const value = assembler([
+      at(1, 'command/run', { commandId: 'wiki-1', name: 'wiki', source: { kind: 'user' } }),
+      at(2, 'command/done', { commandId: 'wiki-1', kind: 'success', text: '{"bases":[]}' }),
+      at(3, 'command/run', { commandId: 'datasource-1', name: 'datasource', source: { kind: 'user' } }),
+      at(4, 'command/done', { commandId: 'datasource-1', kind: 'success', text: '{"datasources":[]}' }),
+      at(5, 'command/run', { commandId: 'plan-1', name: 'plan', source: { kind: 'user' } }),
+      at(6, 'command/done', { commandId: 'plan-1', kind: 'success', text: 'Plan mode' }),
+    ])
+    const current = snapshot(value)
+    const visible = current.order.map(key => current.nodes.get(key))
+    expect(visible).toHaveLength(1)
+    expect(visible[0]?.data).toMatchObject({ name: 'plan' })
+    expect(current.nodes.values().filter(candidate => candidate.kind === 'command')).toHaveLength(3)
+  })
+
   it('projects one reversible process window before the finalized answer', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
