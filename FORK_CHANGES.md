@@ -31,6 +31,44 @@ Strategy: take official master as the tree, then re-apply only core analysis fea
 | Codex exclude rewrite / mysql2 exclude | `pnpm-workspace.yaml` edits | Accidental or install-policy drift; re-add `mysql2` exclude only if install fails |
 | Old lockfile patch | `pnpm-lock.yaml` as a replayed diff | Regenerated from the new upstream base |
 
+## Completeness review (backup ↔ sync)
+
+Compared `backup/pre-upstream-sync-20261105-095546` with `sync/upstream-reapply-20261105` on 2026-11-05.
+
+### Intact
+
+| Check | Result |
+|-------|--------|
+| `local-plugins/` git tree OID | Identical (`36da22a114…`) |
+| KB-scope sources (`analyst` policy/plugin/tools, `contracts/db-document`, `datasource/document`, `wiki` service/entry) | Byte-identical to backup |
+| Panel command API (`recordResult` / `recordLifecycle` / `listed`) + docs/tests | Identical to backup |
+| `ui-commands` `listed: false` filter + test | Identical |
+| `apps/web` stream `fetch` patch + test | Identical |
+| `api-catalog` CommandDefinition / CommandDescriptor strings | Identical |
+| Plugin `dsh.client.inject` package names | All still present under `packages/` |
+| Preset `isolate` for `localAnalyst` | Still supported by agent-preset-registry |
+
+### Intentional merge (not a loss)
+
+`chat-visibility.ts` keeps panel-command hiding (`wiki` / `datasource` / `memory`) and adopts upstream Team-toggle hiding. Backup also hid ordinary Context unless it carried tool add/remove; upstream now shows ordinary Context — sync follows upstream for Context, which matches current official Chat behavior.
+
+### Known non-blocker gaps (dropped on purpose)
+
+| Gap | Impact | Mitigation |
+|-----|--------|------------|
+| No Mermaid/Vega markdown renderers | Analyst may still emit ` ```vega-lite ` fences; they render as code, not charts | Re-apply chart UI from backup if visual charts become required |
+| No `restart-desktop.sh` / `dsh web restart` | Dev restart UX only | Use normal process restart |
+| Desktop cookie helper dropped | None expected | Upstream `authenticateWebHost` + `removeLegacyHostCookies` covers the same failure mode |
+
+### Evidence run on sync tip
+
+- `pnpm run build:artifacts` — pass
+- pre-push `typecheck` (earlier) — pass
+- vitest KEEP suite (commands / ui-commands / ui-chat / desktop-boot) — 232 pass
+- `local-plugins/{analyst,contracts,datasource,memory,wiki}` `npm test` — 209 pass (analyst 46 after artifacts build)
+
+Backup branch and tag remain on `origin`; do not delete until master is cut over and product smoke is signed off.
+
 ## Restore pre-sync tree
 
 ```bash
