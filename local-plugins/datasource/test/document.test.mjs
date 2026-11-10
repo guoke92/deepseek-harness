@@ -70,6 +70,9 @@ test('one table sample becomes a document without dumping identifiers, names or 
   assert.doesNotMatch(material.content, /用户取消/)
   assert.doesNotMatch(material.content, /## 术语/)
   assert.doesNotMatch(material.content, /高频值/)
+  assert.ok(facts.terms.some((item) => item.term === '订单状态' && item.column === 'order_status'))
+  assert.ok(facts.terms.some((item) => item.term === '年费' && item.column === 'annual_fee'))
+  assert.equal(facts.terms.some((item) => item.column === 'id' && item.term === '主键'), true)
 })
 
 test('time columns are not relation keys', () => {

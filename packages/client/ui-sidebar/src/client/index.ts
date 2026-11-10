@@ -15,6 +15,7 @@ import { createPanelPins } from './panel-pins.ts'
 import { HeaderLeadingControls } from './HeaderLeadingControls.tsx'
 import { SidebarRoot } from './SidebarRoot.tsx'
 import { PanelIcon } from './PanelIcon.tsx'
+import { PanelAccessory } from './PanelAccessory.tsx'
 import { en, ja, es, fr, de, ru, pt, zh, type SidebarKey } from './locales.ts'
 
 export type {
@@ -90,6 +91,10 @@ export function apply(ctx: ClientContext): void {
       name: 'sidebar.panel.icon', scope: 'root',
       children: { 'sidebar.panellist': { kind: 'list', scope: 'root' } },
     }, PanelIcon)
+    yield ctx.slots.registerFactory({
+      name: 'sidebar.panel.accessory', scope: 'root',
+      children: { 'sidebar.panellist.accessory': { kind: 'list', scope: 'root' } },
+    }, PanelAccessory)
     yield ctx.slots.register({
       name: 'sidebar',
       locale: NS,

@@ -44,8 +44,9 @@ test('the model sees wiki read tools, material tools, collect, and one gated dec
   apply(ctx)
   const names = ctx.registered.map((t) => t.name).sort()
   assert.deepEqual(names, [
-    'wiki_apply_decision', 'wiki_collect', 'wiki_compile', 'wiki_get_material', 'wiki_graph_expand',
-    'wiki_list_materials', 'wiki_outline', 'wiki_read_page', 'wiki_search',
+    'wiki_apply_decision', 'wiki_collect', 'wiki_compile', 'wiki_coverage', 'wiki_get_material', 'wiki_graph_expand',
+    'wiki_ingest_code', 'wiki_ingest_doc', 'wiki_list_materials', 'wiki_list_packs', 'wiki_outline',
+    'wiki_read_page', 'wiki_resolve', 'wiki_search', 'wiki_set_packs',
   ])
 })
 

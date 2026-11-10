@@ -9,6 +9,8 @@ import { wikiDomainSpec } from './domain.js'
 import { defaultPolicy, validateDecision } from '@local/contracts'
 import { dispatchWiki } from './panel.js'
 import { createTaskRunner } from './tasks.js'
+import { codeMaterial, docMaterial } from './ingest.js'
+import { listPacks } from './packs.js'
 
 export const name = 'wiki'
 export const inject = ['tools', 'storageDomain']
@@ -21,6 +23,7 @@ export function apply(ctx) {
     const service = createWikiService({ domain })
     await service.materials.reconcile()
     await service.adoptLegacy()
+    await service.reconcileOrphans()
     return service
   })()
   ready.catch((err) => ctx.logger?.error?.(`wiki: startup failed: ${String(err?.message ?? err)}`))
@@ -29,6 +32,8 @@ export function apply(ctx) {
   const api = {
     outline: async (knowledgeBaseId) => (await ready).outline(knowledgeBaseId),
     search: async (query, opts) => (await ready).search(query, opts),
+    resolve: async (query, opts) => (await ready).resolve(query, opts),
+    coverage: async (knowledgeBaseId) => (await ready).coverage(knowledgeBaseId),
     page: async (slug, knowledgeBaseId) => (await ready).page(slug, knowledgeBaseId),
     expand: async (center, opts) => (await ready).expand(center, opts),
     decide: async (decision, opts) => (await ready).decide(decision, opts),
@@ -72,6 +77,32 @@ export function apply(ctx) {
     setScope: async (id, datasourceId, tables) => (await ready).bases.setScope(id, datasourceId, tables),
     setDefault: async (id) => (await ready).bases.setDefault(id),
     setFocus: async (id) => (await ready).bases.setFocus(id),
+    setPacks: async (id, packIds) => (await ready).bases.setPacks(id, packIds),
+    listPacks: async () => listPacks().map((pack) => ({
+      id: pack.id, version: pack.version, title: pack.title,
+    })),
+    /**
+     * 投递代码模块证据为粗加工原料。
+     * @param {object} evidence kind=code.module
+     * @param {{knowledgeBaseId?: string, sourceRef?: string}} [opts]
+     */
+    async ingestCode(evidence, opts = {}) {
+      const service = await ready
+      const base = service.resolveBase(opts.knowledgeBaseId)
+      const material = codeMaterial(evidence, { knowledgeBaseId: base.id, sourceRef: opts.sourceRef })
+      return service.captureAll([material])
+    },
+    /**
+     * 投递文档证据为粗加工原料。
+     * @param {object} evidence kind=doc.artifact
+     * @param {{knowledgeBaseId?: string, sourceRef?: string}} [opts]
+     */
+    async ingestDoc(evidence, opts = {}) {
+      const service = await ready
+      const base = service.resolveBase(opts.knowledgeBaseId)
+      const material = docMaterial(evidence, { knowledgeBaseId: base.id, sourceRef: opts.sourceRef })
+      return service.captureAll([material])
+    },
     promote: async (slug, knowledgeBaseId) => (await ready).promote(slug, knowledgeBaseId),
     revert: async (slug, version, knowledgeBaseId) => (await ready).revert(slug, version, knowledgeBaseId),
     resolveProposal: async (id, status) => (await ready).resolveProposal(id, status),
@@ -83,35 +114,48 @@ export function apply(ctx) {
       const base = service.resolveBase(knowledgeBaseId)
       return service.compile({ knowledgeBaseId: base.id, signal: hooks.signal, onItem: hooks.onItem })
     },
+    resolveBase: async (knowledgeBaseId) => (await ready).resolveBase(knowledgeBaseId),
     task: () => tasks.current(),
     pauseTask: () => tasks.pause(),
     resumeTask: () => tasks.resume(),
     cancelTask: () => tasks.cancel(),
     startCollect(datasourceId, opts = {}) {
-      return tasks.start('collect', (task) => api.collect(datasourceId, {
+      const id = Number(datasourceId)
+      return tasks.start('collect', (task) => api.collect(id, {
         ...opts,
         signal: task.controller.signal,
         gate: () => task.gate(),
         onProgress: (progress) => {
           task.phase = progress.phase
-          task.done = progress.done
-          task.total = progress.total
+          task.done = Number(progress.done) || 0
+          task.total = Number(progress.total) || 0
+          task.current = Number(progress.current) || 0
           task.message = progress.message
         },
-      }), { datasourceId, knowledgeBaseId: opts.knowledgeBaseId })
+      }), {
+        datasourceId: Number.isInteger(id) && id > 0 ? id : undefined,
+        knowledgeBaseId: opts.knowledgeBaseId,
+      })
     },
     startCompile(knowledgeBaseId) {
       return tasks.start('compile', async (task) => {
         task.phase = 'compile'
-        return api.compile(knowledgeBaseId, {
+        const result = await api.compile(knowledgeBaseId, {
           signal: task.controller.signal,
-          onItem: async (material, index, total) => {
+          onItem: async (material, index, total, meta) => {
             await task.gate()
             task.done = index
             task.total = total
             task.message = material.sourceRef
+            task.materialId = material.id
+            if (Array.isArray(meta?.runnableIds)) task.runnableIds = meta.runnableIds
           },
         })
+        task.materialId = null
+        task.message = ''
+        task.runnableIds = null
+        if (task.total) task.done = task.total
+        return result
       }, { knowledgeBaseId })
     },
     /**
@@ -211,6 +255,36 @@ export function apply(ctx) {
     }),
   })
   tool({
+    name: 'wiki_resolve',
+    description: '按知识对象检索：字段、业务说法、码值、关联、流程、口径、问法与领域。返回命中与邻接子图，供问数组约束。优先于整页 wiki_search。',
+    properties: {
+      query: { type: 'string', description: '检索词，空白分隔' },
+      limit: { type: 'number', description: '最多返回条数，默认 8' },
+      includeDrafts: { type: 'boolean', description: '是否包含草稿/提议口径，默认 true' },
+      facets: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '限定分面：tech_name、biz_label、value、assoc、process、policy、case、domain',
+      },
+      knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库，否则使用默认知识库' },
+    },
+    required: ['query'],
+    run: (svc, args) => svc.resolve(args.query, {
+      limit: args.limit ?? 8,
+      includeDrafts: args.includeDrafts ?? true,
+      facets: args.facets,
+      knowledgeBaseId: activeBaseId(svc, args.knowledgeBaseId),
+    }),
+  })
+  tool({
+    name: 'wiki_coverage',
+    description: '读取当前知识库的覆盖清单：缺口、冲突与编译代数。',
+    properties: {
+      knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库，否则使用默认知识库' },
+    },
+    run: (svc, args) => svc.coverage(activeBaseId(svc, args.knowledgeBaseId)),
+  })
+  tool({
     name: 'wiki_read_page',
     description: '读取一个 wiki 页面：已发布正文与（若存在）草稿，附出链与版本。',
     properties: {
@@ -287,11 +361,64 @@ export function apply(ctx) {
   })
   tool({
     name: 'wiki_compile',
-    description: '把某个知识库里已有编译器的 captured 原料编译成 wiki 页面或提议。数据库表按采集证据生成页面。没有编译器的来源保持 captured。',
+    description: '把某个知识库里已有编译器的 captured 原料编译成页面、检索投影或提议。db/code/doc/sql/conversation 按已注册编译器处理；绑定的 Domain Pack 在库编译时做弱对齐。没有编译器的来源保持 captured。',
     properties: {
       knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库，否则使用默认知识库' },
     },
     run: (_svc, args) => api.compile(args.knowledgeBaseId),
+  })
+  tool({
+    name: 'wiki_set_packs',
+    description: '为知识库绑定 Domain Pack（按 id 列表，空数组清除）。编译时按绑定顺序弱对齐列与概念；未知 pack 立即失败。',
+    properties: {
+      knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库' },
+      packIds: { type: 'array', items: { type: 'string' }, description: 'Domain Pack id 列表，如 ["scf"]' },
+    },
+    required: ['packIds'],
+    run: async (svc, args) => {
+      const base = svc.resolveBase(args.knowledgeBaseId)
+      return api.setPacks(base.id, args.packIds)
+    },
+  })
+  tool({
+    name: 'wiki_list_packs',
+    description: '列出已注册的 Domain Pack（id、version、title）。',
+    properties: {},
+    run: () => api.listPacks(),
+  })
+  tool({
+    name: 'wiki_ingest_code',
+    description: '投递代码模块结构化证据（枚举/映射/流转/API）为粗加工原料，编译后写入检索投影，不强制写 Wiki 页。',
+    properties: {
+      knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库' },
+      evidence: {
+        type: 'object',
+        description: 'code.module 证据：{kind:"code.module", module, path?, enums?, mappings?, flows?, apis?}',
+      },
+      sourceRef: { type: 'string', description: '来源引用，默认 code:<module>' },
+    },
+    required: ['evidence'],
+    run: (_svc, args) => api.ingestCode(args.evidence, {
+      knowledgeBaseId: args.knowledgeBaseId,
+      sourceRef: args.sourceRef,
+    }),
+  })
+  tool({
+    name: 'wiki_ingest_doc',
+    description: '投递文档结构化证据（术语/流程/规则/场景）为粗加工原料，编译后投影为概念/流程/口径候选。',
+    properties: {
+      knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库' },
+      evidence: {
+        type: 'object',
+        description: 'doc.artifact 证据：{kind:"doc.artifact", title, docUri, subtype, definitions?, processes?, policies?, scenarios?}',
+      },
+      sourceRef: { type: 'string', description: '来源引用，默认 doc:<docUri>' },
+    },
+    required: ['evidence'],
+    run: (_svc, args) => api.ingestDoc(args.evidence, {
+      knowledgeBaseId: args.knowledgeBaseId,
+      sourceRef: args.sourceRef,
+    }),
   })
   tool({
     name: 'wiki_graph_expand',

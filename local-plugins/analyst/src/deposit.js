@@ -39,7 +39,7 @@ export function toRawMaterial(ev, { now = new Date(), datasourceId = null, sessi
     content = `口径确认：${norm(ev.text)}`
     key = norm(ev.text)
     sourceType = 'conversation'
-    evidence = { kind: ev.kind, sessionId, userConfirmed: true }
+    evidence = { kind: ev.kind, sessionId, userConfirmed: true, text: norm(ev.text) }
   } else if (ev.kind === 'sql_confirmed') {
     if (ev.executed !== true) return { ok: false, reason: 'sql must have been executed successfully' }
     if (!Number.isInteger(ev.rowCount) || ev.rowCount < 0) return { ok: false, reason: 'rowCount must be a non-negative integer' }
@@ -49,7 +49,15 @@ export function toRawMaterial(ev, { now = new Date(), datasourceId = null, sessi
     content = `已确认 SQL（返回 ${ev.rowCount} 行）：${sql}`
     key = sql
     sourceType = 'sql'
-    evidence = { kind: ev.kind, sessionId, rowCount: ev.rowCount, sql }
+    const fields = Array.isArray(ev.fields) ? ev.fields.map(norm).filter(Boolean) : []
+    evidence = {
+      kind: ev.kind,
+      sessionId,
+      rowCount: ev.rowCount,
+      sql,
+      ...(norm(ev.question) ? { question: norm(ev.question) } : {}),
+      ...(fields.length ? { fields } : {}),
+    }
   } else {
     const field = norm(ev.field)
     const value = norm(ev.value)

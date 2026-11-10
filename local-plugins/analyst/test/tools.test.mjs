@@ -15,10 +15,12 @@ test('deposit_confirmed is not exposed to the model; others are', () => {
   const names = listToolsForModel().map((t) => t.name)
   assert.ok(!names.includes('deposit_confirmed'))
   assert.ok(names.includes('execute_readonly'))
+  assert.ok(names.includes('wiki_resolve'))
   assert.ok(names.includes('wiki_search'))
 })
 
 test('validateToolArgs: required, unknown keys, type, range and pattern checks', () => {
+  assert.equal(validateToolArgs('wiki_resolve', { query: '确权' }).ok, true)
   assert.equal(validateToolArgs('wiki_search', { query: '手续费' }).ok, true)
   assert.equal(validateToolArgs('wiki_search', {}).ok, false)
   assert.equal(validateToolArgs('wiki_search', { query: 'x', extra: 1 }).ok, false)

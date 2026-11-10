@@ -14,9 +14,11 @@ import { tableMaterial } from './deliver.js'
  * @param {object} opts.policy wiki 策略里的 wiki 段
  */
 export async function profileDatasource(cfg, { datasourceId, tables = null, policy, onProgress, signal, gate }) {
-  onProgress?.({ phase: 'catalog', done: 0, total: 0, message: '读取结构' })
+  onProgress?.({ phase: 'catalog', done: 0, total: 1, current: 1, message: '读取结构' })
   const metas = await readTableMetas(cfg, tables)
-  onProgress?.({ phase: 'count', done: 0, total: metas.length, message: '统计行数' })
+  const total = Math.max(metas.length, 1)
+  onProgress?.({ phase: 'catalog', done: 0, total, current: 1, message: `读取结构 · ${metas.length} 张表` })
+  onProgress?.({ phase: 'count', done: 0, total, current: 1, message: `统计行数 · ${metas.length} 张表` })
   const counts = await readRowCounts(cfg, metas.map((meta) => meta.tableKey))
   const partials = []
   const keys = []
@@ -24,7 +26,7 @@ export async function profileDatasource(cfg, { datasourceId, tables = null, poli
   for (const meta of metas) {
     if (signal?.aborted) throw cancelled()
     if (gate) await gate()
-    onProgress?.({ phase: 'profile', done, total: metas.length, message: meta.tableKey })
+    onProgress?.({ phase: 'profile', done, total, current: done + 1, message: meta.tableKey })
     meta.rowCount = counts[meta.tableKey] ?? 0
     const sample = await sampleTable(cfg, meta, policy.profileSampleRows)
     if (signal?.aborted) throw cancelled()
@@ -32,7 +34,7 @@ export async function profileDatasource(cfg, { datasourceId, tables = null, poli
     partials.push(facts)
     keys.push(...facts.keys)
     done += 1
-    onProgress?.({ phase: 'profile', done, total: metas.length, message: meta.tableKey })
+    onProgress?.({ phase: 'profile', done, total, current: done, message: meta.tableKey })
   }
   const declared = declaredEndpoints(partials)
   const complete = keys.filter((key) => !key.partial)

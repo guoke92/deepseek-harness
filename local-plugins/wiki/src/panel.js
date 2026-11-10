@@ -15,6 +15,17 @@ export async function dispatchWiki(api, body) {
   if (op === 'setScope') return { base: await api.setScope(body.id, body.datasourceId, body.tables ?? []) }
   if (op === 'setDefault') return { base: await api.setDefault(body.id) }
   if (op === 'setFocus') return { base: await api.setFocus(body.id) }
+  if (op === 'setPacks') return { base: await api.setPacks(body.id, body.packIds ?? []) }
+  if (op === 'listPacks') return { packs: await api.listPacks() }
+  if (op === 'coverage') return { coverage: await api.coverage(knowledgeBaseId) }
+  if (op === 'resolveKnowledge') {
+    return await api.resolve(body.query, {
+      limit: body.limit ?? 8,
+      includeDrafts: body.includeDrafts ?? true,
+      facets: body.facets,
+      knowledgeBaseId,
+    })
+  }
   if (op === 'outline') return { outline: await api.outline(knowledgeBaseId) }
   if (op === 'pages') return { pages: await api.pages(knowledgeBaseId) }
   if (op === 'page') return { page: await api.page(body.slug, knowledgeBaseId) }

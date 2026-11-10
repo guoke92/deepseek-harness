@@ -74,30 +74,53 @@ export async function probeConnection(cfg) {
 export async function listCatalog(cfg, { database } = {}) {
   if (cfg.type === 'mysql') {
     const rows = await withReadonly(cfg, (db) => db.query(
-      `SELECT table_schema AS schema_name, table_name AS table_name
+      `SELECT table_schema AS schema_name,
+              table_name AS table_name,
+              COALESCE(NULLIF(table_comment, ''), NULL) AS table_comment
          FROM information_schema.tables
         WHERE table_type = 'BASE TABLE'
         ORDER BY table_schema, table_name`,
     ))
-    return { database: cfg.database, groups: groupCatalog(rows, { type: cfg.type, database: cfg.database }), siblings: [] }
+    return {
+      database: cfg.database,
+      groups: groupCatalog(rows, { type: cfg.type, database: cfg.database }),
+      siblings: [],
+    }
   }
   const target = typeof database === 'string' && database !== '' ? database : cfg.database
   return withReadonly({ ...cfg, database: target }, async (db) => {
     const rows = await db.query(
-      `SELECT table_schema AS schema_name, table_name AS table_name
-         FROM information_schema.tables
-        WHERE table_type = 'BASE TABLE'
-        ORDER BY table_schema, table_name`,
+      `SELECT n.nspname AS schema_name,
+              c.relname AS table_name,
+              NULLIF(obj_description(c.oid, 'pg_class'), '') AS table_comment,
+              NULLIF(obj_description(n.oid, 'pg_namespace'), '') AS schema_comment
+         FROM pg_catalog.pg_class c
+         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind = 'r'
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+        ORDER BY n.nspname, c.relname`,
     )
-    const groups = groupCatalog(rows, { type: cfg.type, database: target })
+    const dbCommentRows = await db.query(
+      `SELECT NULLIF(shobj_description(oid, 'pg_database'), '') AS database_comment
+         FROM pg_database
+        WHERE datname = current_database()`,
+    )
+    const databaseComment = dbCommentRows[0]?.database_comment ?? ''
+    const groups = groupCatalog(rows, { type: cfg.type, database: target, databaseComment })
     if (database) return { database: target, groups, siblings: [] }
     const names = await db.query(
-      `SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname`,
+      `SELECT datname,
+              NULLIF(shobj_description(oid, 'pg_database'), '') AS description
+         FROM pg_database
+        WHERE datallowconn AND NOT datistemplate
+        ORDER BY datname`,
     )
     return {
       database: target,
       groups,
-      siblings: names.map((row) => row.datname).filter((name) => name !== target && /^[A-Za-z0-9_]+$/.test(name)),
+      siblings: names
+        .filter((row) => row.datname !== target && /^[A-Za-z0-9_]+$/.test(row.datname))
+        .map((row) => ({ id: row.datname, description: row.description || '' })),
     }
   })
 }

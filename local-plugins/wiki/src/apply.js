@@ -35,6 +35,9 @@ export function applyDecision(decision, env) {
       reasons: decision.review.reasons,
       ...(typeof decision.review.brief === 'string' ? { brief: decision.review.brief } : {}),
       ...(decision.review.publish ? { publish: decision.review.publish } : {}),
+      ...(typeof decision.review.objectId === 'string' && decision.review.objectId
+        ? { objectId: decision.review.objectId }
+        : {}),
       decisionId: env.decisionId,
       createdAt: at,
       status: 'open',

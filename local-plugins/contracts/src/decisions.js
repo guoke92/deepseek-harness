@@ -22,10 +22,14 @@ export function validateBody(body) {
 /** 决策中的审核信息（hold 等证据不足的项，进入审核区而非丢弃）。 */
 export function validateReviewInfo(r) {
   if (!isObj(r)) return finish(['review must be an object'])
+  const e = []
   if (!Array.isArray(r.reasons) || r.reasons.length === 0 || !r.reasons.every((x) => isStr(x))) {
-    return finish(['review.reasons must be a non-empty string[]'])
+    e.push('review.reasons must be a non-empty string[]')
   }
-  return finish([])
+  if (r.objectId !== undefined && r.objectId !== null && !isStr(r.objectId)) {
+    e.push('review.objectId must be a non-empty string when present')
+  }
+  return finish(e)
 }
 
 /** Decision 输出（模型结构化输出，尚未落地）。 */

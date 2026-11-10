@@ -31,11 +31,11 @@ export function parseTableRef(ref, type, fallbackDatabase) {
 }
 
 /**
- * @param {{schema_name?: string, table_name?: string}[]} rows
- * @param {{type: string, database: string}} origin
- * @returns {{id: string, label: string, kind: string, tables: {id: string, label: string}[]}[]}
+ * @param {{schema_name?: string, table_name?: string, table_comment?: string|null, schema_comment?: string|null}[]} rows
+ * @param {{type: string, database: string, databaseComment?: string|null}} origin
+ * @returns {{id: string, label: string, kind: string, description: string, tables: {id: string, label: string, description: string}[]}[]}
  */
-export function groupCatalog(rows, { type, database }) {
+export function groupCatalog(rows, { type, database, databaseComment = '' }) {
   const skip = type === 'mysql' ? MYSQL_SKIP : PG_SKIP
   const groups = new Map()
   for (const row of rows) {
@@ -45,15 +45,20 @@ export function groupCatalog(rows, { type, database }) {
     if (!IDENT.test(schema) || !IDENT.test(table) || !IDENT.test(database)) continue
     const groupId = type === 'mysql' ? schema : `${database}.${schema}`
     if (!groups.has(groupId)) {
+      const schemaComment = typeof row.schema_comment === 'string' ? row.schema_comment.trim() : ''
       groups.set(groupId, {
         id: groupId,
         label: type === 'mysql' ? schema : `${database} / ${schema}`,
         kind: type === 'mysql' ? 'database' : 'schema',
+        description: type === 'mysql'
+          ? (schema === database ? String(databaseComment || '').trim() : schemaComment)
+          : String(databaseComment || schemaComment || '').trim(),
         tables: [],
       })
     }
     const id = type === 'mysql' ? `${schema}.${table}` : `${database}.${schema}.${table}`
-    groups.get(groupId).tables.push({ id, label: table })
+    const description = typeof row.table_comment === 'string' ? row.table_comment.trim() : ''
+    groups.get(groupId).tables.push({ id, label: table, description })
   }
   return [...groups.values()]
 }

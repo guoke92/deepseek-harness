@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-09-knowledge-coarse-fine-compile.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-11-09-knowledge-coarse-fine-compile.md
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile:
+  en: e0ee009c250d7cf4
+  zh: b8e29ae66edb2e41
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/problem:
+  en: 21b76300a3f3a233
+  zh: 3fb1371e35b5c61b
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/proposal:
+  en: 64eadb9c2239a2c8
+  zh: ba14973d614f93d9
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/proposal/business-metamodel-closed:
+  en: d9b3664dce07cc0d
+  zh: be14a0fdb7277608
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/proposal/implementation-slices:
+  en: f41207fa6aa233f5
+  zh: e33720ce090d5d1a
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/alternatives-considered:
+  en: 281e8dfee6137cba
+  zh: bdeaa21cb97e38ab
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/acceptance-criteria:
+  en: c6fd46544335133a
+  zh: 6367e6f299e80fd2
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/risks:
+  en: 64319886b85c5e27
+  zh: a6bf5b0674a61fb0

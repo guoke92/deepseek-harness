@@ -742,6 +742,26 @@
   white-space: nowrap;
 }
 
+.panelAccessory {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.panelAccessoryCollapsed {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .collapsed .panelList {
   gap: 12px;
   margin-bottom: 12px;

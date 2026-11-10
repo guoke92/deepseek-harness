@@ -48,7 +48,7 @@ export function buildQueryPrompt(policy, { outline = '', datasourceId = null, so
   }
 
   lines.push('', '【检索与口径】')
-  lines.push('- 先用 wiki_search 与 wiki_read_page 检索当前知识库的页面；没有页面时改读 wiki_list_materials 与 wiki_get_material，并说明口径尚未编译。表、字段和口径以这些页面和原料为准。')
+  lines.push('- 先用 wiki_resolve 按字段、业务说法、码值、关联、问法与口径检索；需要整页原文时再用 wiki_search / wiki_read_page。没有命中时改读 wiki_list_materials 与 wiki_get_material，并说明口径尚未编译。表、字段和口径以检索命中与页面为准。')
   if (sources) lines.push('', '【当前知识库的数据源】', sources, '- 只查询上面列出的数据源。表必须落在该数据源已选范围内；范围写成「连接库中的表」时，查询停在这个数据源的连接库。')
   lines.push('- 已发布口径可直接使用，草稿口径必须在回答中注明"草稿口径，未审核"。')
   if (!q.retrieval.includeDrafts) lines.push('- 当前策略不使用草稿口径，检索结果只来自已发布页面。')

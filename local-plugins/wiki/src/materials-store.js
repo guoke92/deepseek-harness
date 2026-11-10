@@ -3,9 +3,9 @@
  *
  * 不变式：
  *  - 同一幂等键（知识库 + sourceType + sourceRef）只保留一条原料。
- *  - 内容没变时再次投递返回已有 id，不改状态。
- *  - 内容变了则就地更新正文和证据，状态回到 captured，并清掉多余的重复行。
- *  - status 与 decisionId 在同一次 update 中写入。状态迁移经 contracts.validateMaterialTransition 校验。
+ *  - 再次投递同一来源时不新增行；内容变化则更新正文与证据。
+ *  - 采集/投递覆盖后，已编译或失败的原料一律回到 captured，便于重新编译。
+ *  - status 与 decisionId 在同一次 update 中写入。显式 transition 仍经 contracts.validateMaterialTransition 校验。
  */
 import { randomBytes } from 'node:crypto'
 import {
@@ -48,11 +48,17 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
     const canonical = oldest(rows)
     const fresh = incoming ?? newest(rows)
     const contentHash = incoming ? contentHashOf(incoming.content) : fresh.contentHash
-    const changed = contentHash !== canonical.contentHash
+    const structureChanged = incoming?.structureHash != null
+      && incoming.structureHash !== canonical.structureHash
+    const profileOnly = incoming?.profileHash != null
+      && incoming.structureHash != null
+      && incoming.structureHash === canonical.structureHash
+      && incoming.profileHash !== canonical.profileHash
+    const changed = contentHash !== canonical.contentHash || structureChanged || profileOnly
     if (changed) {
       const next = await table.update(canonical.id, (cur) => {
-        const { failureReason: _drop, ...rest } = cur
-        return {
+        const { failureReason: _drop, refreshKind: _refresh, ...rest } = cur
+        const out = {
           ...rest,
           content: fresh.content,
           contentHash,
@@ -62,6 +68,12 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
           decisionId: null,
           updatedAt: incoming?.updatedAt ?? fresh.updatedAt ?? fresh.createdAt ?? now(),
         }
+        if (fresh.assertions) out.assertions = fresh.assertions
+        if (fresh.emphasis) out.emphasis = fresh.emphasis
+        if (fresh.structureHash) out.structureHash = fresh.structureHash
+        if (fresh.profileHash) out.profileHash = fresh.profileHash
+        if (profileOnly && !structureChanged) out.refreshKind = 'profile'
+        return out
       })
       const checked = validateRawMaterial(next)
       if (!checked.ok) throw new Error(`material record invalid: ${checked.errors.join('; ')}`)
@@ -75,8 +87,9 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
   }
 
   /**
-   * 投递一条原料。返回 { id, created }。
-   * 同一来源已存在时不新增。内容有变化则更新那一条并回到待编译。
+   * 投递一条原料。返回 { id, created, reopened? }。
+   * 同一来源已存在时不新增；内容变化则更新正文。
+   * 覆盖投递时，已编译或失败的原料一律回到 captured（即使正文未变）。
    * @param {object} input 符合 validateMaterialInput 的投递内容
    */
   function capture(input) {
@@ -90,9 +103,37 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
     })
     return queue.run(async () => {
       const rows = table.list().filter((row) => sourceKey(row) === key)
-      if (rows.length === 1 && rows[0].contentHash === contentHash) return { id: rows[0].id, created: false }
+      const identical = rows.length === 1 && rows[0].contentHash === contentHash
+        && (input.structureHash === undefined || input.structureHash === rows[0].structureHash)
+        && (input.profileHash === undefined || input.profileHash === rows[0].profileHash)
+      if (identical) {
+        const existing = rows[0]
+        if (existing.status === 'captured') return { id: existing.id, created: false }
+        // 采集再次覆盖：即使正文未变，也清掉旧编译结果，回到待编译。
+        const next = await table.update(existing.id, (cur) => {
+          const { failureReason: _drop, refreshKind: _refresh, ...rest } = cur
+          return {
+            ...rest,
+            status: 'captured',
+            decisionId: null,
+            updatedAt: now(),
+          }
+        })
+        const checked = validateRawMaterial(next)
+        if (!checked.ok) throw new Error(`material record invalid: ${checked.errors.join('; ')}`)
+        return { id: existing.id, created: false, reopened: true }
+      }
       if (rows.length > 0) {
-        const id = await collapse(rows, { content: input.content, evidence: input.evidence, datasourceId: input.datasourceId, updatedAt: now() })
+        const id = await collapse(rows, {
+          content: input.content,
+          evidence: input.evidence,
+          datasourceId: input.datasourceId,
+          assertions: input.assertions,
+          emphasis: input.emphasis,
+          structureHash: input.structureHash,
+          profileHash: input.profileHash,
+          updatedAt: now(),
+        })
         return { id, created: false }
       }
       const record = {
@@ -108,6 +149,10 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
         decisionId: null,
         createdAt: now(),
         ...(input.knowledgeBaseId ? { knowledgeBaseId: input.knowledgeBaseId } : {}),
+        ...(input.assertions ? { assertions: input.assertions } : {}),
+        ...(input.emphasis ? { emphasis: input.emphasis } : {}),
+        ...(input.structureHash ? { structureHash: input.structureHash } : {}),
+        ...(input.profileHash ? { profileHash: input.profileHash } : {}),
       }
       const ok = validateRawMaterial(record)
       if (!ok.ok) throw new Error(`material record invalid: ${ok.errors.join('; ')}`)
@@ -130,7 +175,7 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
       const t = validateMaterialTransition(current.status, to)
       if (!t.ok) throw new Error(t.errors.join('; '))
       const next = await table.update(id, (cur) => {
-        const { failureReason: _drop, ...rest } = cur
+        const { failureReason: _drop, refreshKind: _refresh, ...rest } = cur
         const out = { ...rest, status: to, decisionId: to === 'decided' ? extra.decisionId ?? null : null }
         if (to === 'failed') out.failureReason = extra.failureReason ?? 'unknown'
         return out

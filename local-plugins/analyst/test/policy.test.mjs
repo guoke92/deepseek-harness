@@ -43,6 +43,7 @@ test('buildQueryPrompt: includes outline only when preload is on, and reflects o
 test('buildQueryPrompt: draft caliber must be labelled; drafts disabled is stated', () => {
   const p = defaultPolicy()
   assert.match(buildQueryPrompt(p), /草稿口径，未审核/)
+  assert.match(buildQueryPrompt(p), /wiki_resolve/)
   const noDraft = structuredClone(p)
   noDraft.query.retrieval.includeDrafts = false
   assert.match(buildQueryPrompt(noDraft), /只来自已发布页面/)

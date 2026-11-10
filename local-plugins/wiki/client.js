@@ -26,6 +26,7 @@ window.__ModuleLoader__.load({
       defaultsHint: '这里保存连接和默认采集范围。知识库绑定时先用这套，可以在知识库里单独调整',
       scopeInherited: '使用数据源默认范围',
       scopeOverride: '本知识库已单独调整范围',
+      scopeDefaultTag: '默认范围',
       useDefaultScope: '恢复默认范围',
       confirmSource: '删除数据源「{name}」',
       confirmBodySource: '删除后各个知识库都不再使用这个连接',
@@ -60,7 +61,8 @@ window.__ModuleLoader__.load({
       promote: '提升草稿',
       accept: '接受',
       reject: '拒绝',
-      compile: '编译原料',
+      compile: '编译',
+      compiling: '编译中',
       colName: '文件名',
       colTag: '标签',
       colStatus: '状态',
@@ -71,9 +73,13 @@ window.__ModuleLoader__.load({
       groupStore: '存储与数据',
       sectionInfo: '基本信息',
       sectionSources: '数据源',
+      sectionPacks: '领域 Pack',
       sectionInfoHint: '名称和说明只属于这个知识库',
       sectionSourcesHint: '采集和编译只使用这里绑定的数据源',
+      sectionPacksHint: '可选绑定 Domain Pack；默认不绑，编译时才展开先验',
       settingsLive: '数据源的绑定会立即生效',
+      packsLive: 'Pack 绑定会立即生效',
+      packNone: '暂无可用 Pack',
       needSession: '先打开一个会话，再使用知识库',
       published: '已发布',
       draft_only: '草稿',
@@ -131,6 +137,13 @@ window.__ModuleLoader__.load({
       taskCancelled: '任务已取消',
       taskFailed: '任务失败',
       taskProgress: '{done}/{total}',
+      collectOk: '采集成功',
+      collectFail: '采集失败',
+      collectPhaseCatalog: '读取结构',
+      collectPhaseCount: '统计行数',
+      collectPhaseProfile: '剖析',
+      collectProgressDetail: '({current}/{total}) {phase} {detail}',
+      collectTable: '{table} 表',
       filterAll: '全部',
       stepSources: '点开数据源选择库和表，再开始采集',
       stepMaterials: '数据库原料先按数据源分开，再按表、值域、连接、字典列出',
@@ -175,7 +188,7 @@ window.__ModuleLoader__.load({
       removeMaterial: '删除这条',
       readerEmptyMaterial: '从左侧选择一条原料',
       collectNone: '未采集',
-      collectedDone: '已采集',
+      collectedDone: '采集成功',
       connectUnknown: '未检测',
       connectOk: '已连通',
       connectFailed: '连接失败',
@@ -183,6 +196,14 @@ window.__ModuleLoader__.load({
       modeReader: '目录和正文',
       editScope: '编辑范围',
       noDesc: '暂无描述',
+      failDetailTitle: '编译失败',
+      failProcess: '编译过程',
+      failReason: '失败原因',
+      failStageCompile: '生成页面决策',
+      failStageApply: '写入页面',
+      failStageProject: '检索投影',
+      failHint: '修好原因后，点「编译原料」可重试这条',
+      failUnknown: '未记录失败原因',
     }
     const en = {
       nav: 'Knowledge',
@@ -205,6 +226,7 @@ window.__ModuleLoader__.load({
       defaultsHint: 'Connections and the default collect scope live here. A knowledge base starts from this default and can change its own copy',
       scopeInherited: 'Using the data source default',
       scopeOverride: 'This knowledge base uses its own scope',
+      scopeDefaultTag: 'default range',
       useDefaultScope: 'Use the default scope',
       confirmSource: 'Delete data source "{name}"',
       confirmBodySource: 'Knowledge bases will no longer use this connection',
@@ -240,6 +262,7 @@ window.__ModuleLoader__.load({
       accept: 'Accept',
       reject: 'Reject',
       compile: 'Compile',
+      compiling: 'Compiling',
       colName: 'Name',
       colTag: 'Tag',
       colStatus: 'Status',
@@ -250,9 +273,13 @@ window.__ModuleLoader__.load({
       groupStore: 'Storage',
       sectionInfo: 'Profile',
       sectionSources: 'Sources',
+      sectionPacks: 'Domain packs',
       sectionInfoHint: 'Name and description belong to this knowledge base',
       sectionSourcesHint: 'Collect and compile use only the sources bound here',
+      sectionPacksHint: 'Optionally bind domain packs; none by default, priors expand at compile',
       settingsLive: 'Source bindings apply immediately',
+      packsLive: 'Pack bindings apply immediately',
+      packNone: 'No packs available',
       needSession: 'Open a session before using Knowledge',
       published: 'Published',
       draft_only: 'Draft',
@@ -310,6 +337,13 @@ window.__ModuleLoader__.load({
       taskCancelled: 'Task cancelled',
       taskFailed: 'Task failed',
       taskProgress: '{done}/{total}',
+      collectOk: 'Collected',
+      collectFail: 'Collect failed',
+      collectPhaseCatalog: 'Reading schema',
+      collectPhaseCount: 'Counting rows',
+      collectPhaseProfile: 'Profiling',
+      collectProgressDetail: '({current}/{total}) {phase} {detail}',
+      collectTable: 'table {table}',
       filterAll: 'All',
       stepSources: 'Open a source to choose tables, then collect',
       stepMaterials: 'Database materials are grouped by data source, then by table, values, link, and dictionary',
@@ -362,6 +396,14 @@ window.__ModuleLoader__.load({
       modeReader: 'Directory and article',
       editScope: 'Edit scope',
       noDesc: 'No description',
+      failDetailTitle: 'Compile failed',
+      failProcess: 'Compile steps',
+      failReason: 'Failure reason',
+      failStageCompile: 'Build page decisions',
+      failStageApply: 'Write pages',
+      failStageProject: 'Retrieval projection',
+      failHint: 'After fixing the cause, click Compile to retry this material',
+      failUnknown: 'No failure reason was recorded',
     }
     const panelId = 'local-wiki'
     const blank = () => ({ name: '', type: 'postgresql', host: '127.0.0.1', port: '5432', database: '', username: '', password: '' })
@@ -468,6 +510,12 @@ window.__ModuleLoader__.load({
       return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true' },
         h('path', { d: 'M8 3.5v9M3.5 8h9', stroke: 'currentColor', strokeWidth: 1.2, strokeLinecap: 'round' }))
     }
+    function SpinnerIcon(props = {}) {
+      const size = props.size || 12
+      return h('svg', { className: 'lwiki-spin', width: size, height: size, viewBox: '0 0 12 12', fill: 'none', 'aria-hidden': 'true' },
+        h('circle', { cx: 6, cy: 6, r: 4.5, stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeDasharray: '18 10', opacity: 0.9 }),
+      )
+    }
     function CloseIcon() {
       return h('svg', { width: 16, height: 16, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': 'true' },
         h('path', { d: 'M4.5 4.5l7 7M11.5 4.5l-7 7', stroke: 'currentColor', strokeWidth: 1.2, strokeLinecap: 'round' }))
@@ -508,7 +556,7 @@ window.__ModuleLoader__.load({
     const CSS = `
 .lwiki { display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font-size: 14px; line-height: 22px; }
 .lwiki-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px clamp(24px, 4vw, 48px) 0; }
-.lwiki-top { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; padding: 16px clamp(24px, 4vw, 48px) 0; }
+.lwiki-top { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 16px; padding: 16px clamp(24px, 4vw, 48px) 0; overflow: visible; }
 [data-platform='darwin'] .lwiki-head,
 [data-platform='darwin'] .lwiki-top { padding-top: var(--dsh-frame-top-clearance, 16px); }
 .lwiki-top .lwiki-nav { flex: 0 1 auto; margin: 0; }
@@ -543,14 +591,15 @@ window.__ModuleLoader__.load({
 .lwiki-md table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 20px; }
 .lwiki-md th, .lwiki-md td { padding: 6px 8px; border-bottom: 0.5px solid var(--dsw-alias-border-l3); text-align: left; vertical-align: top; white-space: nowrap; }
 .lwiki-md th { font-weight: 500; color: var(--dsw-alias-label-secondary); }
-.lwiki-job-inline { margin-left: auto; display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; flex: 1 1 240px; }
-.lwiki-job-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
-.lwiki-job-inline .lwiki-bar { flex: 0 0 72px; }
-.lwiki-job-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; flex: 0 0 auto; }
+.lwiki-job-mid { flex: 1 1 160px; display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
+.lwiki-job-label { flex: 0 1 auto; min-width: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.lwiki-job-mid .lwiki-bar { flex: 0 0 72px; }
 .lwiki-bar[data-indeterminate='true'] > span { width: 40%; animation: lwiki-slide 1.1s ease-in-out infinite; }
 @keyframes lwiki-slide { from { transform: translateX(-130%); } to { transform: translateX(280%); } }
+@keyframes lwiki-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .lwiki-bar[data-indeterminate='true'] > span { animation: none; width: 100%; opacity: 0.45; }
+  .lwiki-spin { animation: none; }
 }
 .lwiki-db-trigger { display: inline-flex; align-items: center; gap: 6px; height: 28px; margin-bottom: 12px; padding: 0 10px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 20px; cursor: pointer; }
 .lwiki-db-trigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
@@ -563,11 +612,24 @@ window.__ModuleLoader__.load({
 .lwiki-scope-head .lwiki-check { flex: 1; min-width: 0; }
 .lwiki-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; flex: 0 0 auto; margin-bottom: 12px; }
 .lwiki-toolbar .lwiki-input { max-width: 320px; }
-.lwiki-toolbar .lwiki-filters { margin: 0; }
-.lwiki-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.lwiki-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px clamp(24px, 4vw, 48px) 0; }
-.lwiki-tab { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 0; border-radius: 14px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px; line-height: 22px; cursor: pointer; }
+.lwiki-toolbar .lwiki-filters { margin: 0; flex: 0 1 auto; }
+.lwiki-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 0 0 auto; }
+.lwiki-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px clamp(24px, 4vw, 48px) 0; overflow: visible; }
+.lwiki-tab { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 14px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px; line-height: 22px; cursor: pointer; overflow: visible; }
 .lwiki-tab:hover, .lwiki-tab[aria-selected='true'] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.lwiki-tab-mark { position: absolute; top: 0; right: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-error-primary); box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base); pointer-events: none; }
+.lwiki-tab-mark[data-tone='ok'] { background: var(--dsw-alias-state-success-primary); }
+.lwiki-tab-mark[data-tone='error'] { background: var(--dsw-alias-state-error-primary); }
+.lwiki-tab-badge { position: absolute; top: -6px; right: -6px; box-sizing: border-box; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--dsw-alias-state-error-primary); color: var(--dsw-alias-label-primary-foreground, #fff); font-size: 9px; line-height: 14px; font-weight: 500; text-align: center; white-space: nowrap; box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base); pointer-events: none; }
+.lwiki-tab-spin { position: absolute; top: -1px; right: -1px; display: inline-flex; pointer-events: none; color: var(--dsw-alias-state-business-primary); }
+.lwiki-nav-accessory { display: inline-flex; align-items: center; justify-content: center; line-height: 0; color: var(--dsw-alias-state-business-primary); }
+.lwiki-nav-mark { width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-state-error-primary); box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base); }
+.lwiki-nav-mark[data-tone='ok'] { background: var(--dsw-alias-state-success-primary); }
+.lwiki-nav-mark[data-tone='error'] { background: var(--dsw-alias-state-error-primary); }
+.lwiki-scope-label { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1 1 auto; }
+.lwiki-scope-label > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lwiki-scope-desc { flex: 0 1 auto; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lwiki-spin { flex: 0 0 auto; animation: lwiki-spin 0.8s linear infinite; }
 .lwiki-tab:focus-visible, .lwiki-btn:focus-visible, .lwiki-row:focus-visible, .lwiki-kind:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
 .lwiki-head, .lwiki-top, .lwiki-tabs, .lwiki-job { flex: 0 0 auto; }
 .lwiki-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px clamp(24px, 4vw, 48px) 48px; }
@@ -606,7 +668,7 @@ button.lwiki-card { width: 100%; font: inherit; text-align: left; cursor: pointe
 button.lwiki-card[aria-current='page'] { background: var(--dsw-alias-interactive-bg-hover); }
 .lwiki-kb:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .lwiki-kb:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
-.lwiki-source-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 112px; padding: 14px 16px; border: 0.5px dashed var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; line-height: 20px; cursor: pointer; }
+.lwiki-source-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; width: 100%; height: 112px; min-height: 112px; padding: 12px 16px; border: 0.5px dashed var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xl); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; line-height: 20px; cursor: pointer; }
 .lwiki-source-add svg { width: 22px; height: 22px; }
 .lwiki-source-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 .lwiki-source-add:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
@@ -676,6 +738,7 @@ button.lwiki-card[aria-current='page'] { background: var(--dsw-alias-interactive
 .lwiki-status-line { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; white-space: nowrap; }
 .lwiki-status-line[data-tone='ok'] { color: var(--dsw-alias-state-success-primary); }
 .lwiki-status-line[data-tone='error'] { color: var(--dsw-alias-state-error-primary); }
+.lwiki-status-line[data-tone='active'] { color: var(--dsw-alias-state-business-primary); }
 .lwiki-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
 .lwiki-dir-row:hover, .lwiki-dir-row[aria-current='page'], .lwiki-doc:hover, .lwiki-doc[aria-current='page'] { background: var(--dsw-alias-interactive-bg-hover); }
 .lwiki-dir-row:focus-visible, .lwiki-doc:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
@@ -689,6 +752,17 @@ button.lwiki-card[aria-current='page'] { background: var(--dsw-alias-interactive
 .lwiki-article-main { min-width: 0; }
 .lwiki-article-time { flex: 0 0 auto; padding-top: 6px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; white-space: nowrap; }
 .lwiki-article-title { margin: 0 0 10px; font-size: 22px; line-height: 30px; font-weight: 500; }
+.lwiki-fail { margin: 0 0 16px; padding: 12px 14px; border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 35%, var(--dsw-alias-border-l3)); border-radius: var(--dsw-radius-lg); background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, var(--dsw-alias-bg-layer-1)); }
+.lwiki-fail-title { margin: 0 0 10px; color: var(--dsw-alias-state-error-primary); font-size: 13px; line-height: 20px; font-weight: 500; }
+.lwiki-fail-label { margin: 0 0 6px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+.lwiki-fail-steps { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lwiki-fail-step { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.lwiki-fail-step[data-state='done'] { color: var(--dsw-alias-state-success-primary); }
+.lwiki-fail-step[data-state='failed'] { color: var(--dsw-alias-state-error-primary); font-weight: 500; }
+.lwiki-fail-step[data-state='pending'] { color: var(--dsw-alias-label-tertiary); }
+.lwiki-fail-mark { flex: 0 0 auto; width: 16px; text-align: center; font-size: 12px; line-height: 18px; }
+.lwiki-fail-reason { margin: 0 0 8px; padding: 10px 12px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-word; }
+.lwiki-fail-hint { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 .lwiki-refs { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l3); }
 .lwiki-ref { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: start; font-size: 13px; line-height: 20px; }
 .lwiki-ref-label { color: var(--dsw-alias-label-tertiary); }
@@ -708,19 +782,29 @@ button.lwiki-card[aria-current='page'] { background: var(--dsw-alias-interactive
 .lwiki-settings-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; }
 .lwiki-settings-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 0.5px solid var(--dsw-alias-border-l3); }
 .lwiki-settings-form { display: flex; flex-direction: column; gap: 12px; max-width: 420px; }
-.lwiki-ds { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 10px; row-gap: 4px; align-items: center; width: 100%; min-height: 112px; padding: 14px 40px 14px 16px; border: 0.5px solid var(--dsw-alias-settings-card-stroke); border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-settings-card-fill); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lwiki-ds { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: auto auto minmax(36px, auto); column-gap: 10px; row-gap: 2px; align-items: center; align-content: center; box-sizing: border-box; width: 100%; height: 112px; min-height: 112px; padding: 12px 40px 12px 16px; border: 0.5px solid var(--dsw-alias-settings-card-stroke); border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-settings-card-fill); color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; }
 .lwiki-ds:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .lwiki-ds:disabled { cursor: not-allowed; opacity: 0.45; }
 .lwiki-ds:disabled:hover { background: var(--dsw-alias-settings-card-fill); }
 .lwiki-ds[aria-pressed='true'], .lwiki-ds[aria-current='page'] { border-color: var(--dsw-alias-state-success-primary); }
 .lwiki-ds:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
-.lwiki-badge { grid-row: 1 / span 3; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--dsw-radius-md); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent); color: var(--dsw-alias-state-success-primary); font-size: 14px; line-height: 20px; font-weight: 500; }
+.lwiki-badge { grid-row: 1 / span 3; align-self: start; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--dsw-radius-md); background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent); color: var(--dsw-alias-state-success-primary); font-size: 14px; line-height: 20px; font-weight: 500; }
 .lwiki-ds .lwiki-kb-title { min-width: 0; }
-.lwiki-ds-line { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
-.lwiki-ds-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
-.lwiki-ds-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dsw-alias-label-tertiary); flex: 0 0 auto; }
-.lwiki-ds-dot[data-tone='ok'] { background: var(--dsw-alias-state-success-primary); }
-.lwiki-ds-dot[data-tone='error'] { background: var(--dsw-alias-state-error-primary); }
+.lwiki-ds-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+.lwiki-ds-type { flex: 0 0 auto; }
+.lwiki-ds-status { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--dsw-alias-label-secondary); }
+.lwiki-ds-status[data-tone='ok'] { color: var(--dsw-alias-state-success-primary); }
+.lwiki-ds-status[data-tone='error'] { color: var(--dsw-alias-state-error-primary); }
+.lwiki-ds-status[data-tone='active'] { color: var(--dsw-alias-state-business-primary); }
+.lwiki-ds-foot { grid-column: 2; display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 100%; min-width: 0; min-height: 36px; }
+.lwiki-ds-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 16px; }
+.lwiki-ds-progress { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 100%; min-width: 0; }
+.lwiki-ds-progress-row { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; height: 16px; }
+.lwiki-ds-progress-row .lwiki-bar { flex: 1 1 auto; min-width: 0; }
+.lwiki-ds-cancel { flex: 0 0 auto; width: 16px; height: 16px; }
+.lwiki-ds-cancel svg { width: 12px; height: 12px; }
+.lwiki-ds-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.85; flex: 0 0 auto; }
+.lwiki-ds-status:not([data-tone]) .lwiki-ds-dot { color: var(--dsw-alias-label-tertiary); }
 .lwiki-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 .lwiki-type { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 96px; padding: 14px; border: 0.5px solid var(--dsw-alias-settings-card-stroke); border-radius: var(--dsw-radius-xl); background: var(--dsw-alias-bg-layer-1); color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .lwiki-type[aria-pressed='true'] { border-color: var(--dsw-alias-state-success-primary); }
@@ -763,9 +847,26 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
     let catalogEpoch = 0
     let catalogFlight = null
     let detailFlight = null
+    /** 右侧栏「知识库」入口的处理态：转圈 / 完成点。 */
+    let navMark = null
+    const navMarkListeners = new Set()
+    function publishNavMark(mark) {
+      navMark = mark
+      for (const listener of navMarkListeners) listener(mark)
+    }
     function invalidateCatalog() {
       catalogEpoch += 1
       catalog = null
+    }
+    /** 避免缓存 catalog 把刚启动的任务冲掉；同 id 用服务端快照刷新进度。已结束的任务不回填到空状态。 */
+    function mergeTask(current, next) {
+      const nextLive = next && (next.status === 'running' || next.status === 'paused')
+      if (!current) return nextLive ? next : null
+      const currentLive = current.status === 'running' || current.status === 'paused'
+      if (!next) return currentLive ? current : null
+      if (currentLive && next.id === current.id) return next
+      if (currentLive && !nextLive && next.id !== current.id) return current
+      return nextLive ? next : null
     }
     function publishBases() {
       invalidateCatalog()
@@ -848,6 +949,19 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         h('path', { d: 'M3 2.75h6.2c1.6 0 2.8 1.05 2.8 2.45V13.25H5.2C4 13.25 3 12.3 3 11.1V2.75z', stroke: 'currentColor', strokeWidth, strokeLinejoin: 'round' }),
         h('path', { d: 'M3 11.1h9', stroke: 'currentColor', strokeWidth }),
       )
+    }
+    function KnowledgeNavAccessory() {
+      const [mark, setMark] = useState(navMark)
+      useEffect(() => {
+        const sync = (next) => setMark(next)
+        navMarkListeners.add(sync)
+        setMark(navMark)
+        return () => { navMarkListeners.delete(sync) }
+      }, [])
+      if (!mark) return null
+      if (mark.spinning) return h('span', { className: 'lwiki-nav-accessory' }, h(SpinnerIcon, { size: 12 }))
+      if (mark.tone) return h('span', { className: 'lwiki-nav-accessory' }, h('span', { className: 'lwiki-nav-mark', 'data-tone': mark.tone }))
+      return null
     }
     function BaseSeat({ ctx, t }) {
       const [bases, setBases] = useState([])
@@ -932,11 +1046,18 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           label: () => t()('nav'),
           locale: ns,
         }, KnowledgeIcon)), 'wiki.nav')
+        ctx.effect(() => ctx.slots.inject('sidebar.panellist.accessory', () => ctx.slots.register({
+          name: 'sidebar.panellist.accessory',
+          id: panelId,
+        }, KnowledgeNavAccessory)), 'wiki.navAccessory')
         ctx.effect(() => ctx.slots.inject('main', () => ctx.slots.register({
           name: 'main',
           key: panelId,
           locale: ns,
         }, function KnowledgePage() {
+          useEffect(() => {
+            if (navMark && !navMark.spinning) publishNavMark(null)
+          }, [])
           return h(Panel, { ctx, t: t() })
         })), 'wiki.page')
         const analystPresetId = 'analyst'
@@ -992,16 +1113,28 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       for (const group of catalog?.groups ?? []) {
         const name = group.kind === 'database' ? String(group.id) : String(group.id ?? '').split('.')[0]
         if (!name) continue
-        const row = map.get(name) ?? { id: name, label: name, tables: [] }
+        const row = map.get(name) ?? {
+          id: name,
+          label: name,
+          description: typeof group.description === 'string' ? group.description : '',
+          tables: [],
+        }
+        if (!row.description && typeof group.description === 'string') row.description = group.description
         const schema = group.kind === 'database' ? '' : String(group.id ?? '').slice(name.length + 1)
         for (const table of group.tables ?? []) {
           if (!table?.id) continue
-          row.tables.push({ id: table.id, label: schema && schema !== 'public' ? `${schema}.${table.label}` : table.label })
+          row.tables.push({
+            id: table.id,
+            label: schema && schema !== 'public' ? `${schema}.${table.label}` : table.label,
+            description: typeof table.description === 'string' ? table.description : '',
+          })
         }
         map.set(name, row)
       }
-      for (const name of catalog?.siblings ?? []) {
-        if (name && !map.has(name)) map.set(name, { id: name, label: name, tables: [] })
+      for (const sibling of catalog?.siblings ?? []) {
+        const name = typeof sibling === 'string' ? sibling : sibling?.id
+        const description = typeof sibling === 'object' && sibling ? String(sibling.description ?? '') : ''
+        if (name && !map.has(name)) map.set(name, { id: name, label: name, description, tables: [] })
       }
       const preferred = String(fallback || catalog?.database || '')
       return [...map.values()].map((row) => ({ ...row, isDefault: row.id === preferred }))
@@ -1060,6 +1193,18 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const [query, setQuery] = useState('')
       const [error, setError] = useState('')
       const [notice, setNotice] = useState('')
+      const noticeTimer = useRef(0)
+      const flashNotice = (text) => {
+        if (noticeTimer.current) window.clearTimeout(noticeTimer.current)
+        setNotice(text)
+        noticeTimer.current = window.setTimeout(() => {
+          setNotice('')
+          noticeTimer.current = 0
+        }, 2000)
+      }
+      useEffect(() => () => {
+        if (noticeTimer.current) window.clearTimeout(noticeTimer.current)
+      }, [])
       const [busy, setBusy] = useState('')
       const [editingId, setEditingId] = useState(null)
       const [showForm, setShowForm] = useState(false)
@@ -1081,6 +1226,8 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const [scopeError, setScopeError] = useState('')
       const [scopeBusy, setScopeBusy] = useState(false)
       const [job, setJob] = useState(null)
+      const [tabMarks, setTabMarks] = useState({})
+      const [taskBaseline, setTaskBaseline] = useState(null)
       const [view, setView] = useState(null)
       const [materialFilter, setMaterialFilter] = useState('all')
       const [materialFocus, setMaterialFocus] = useState(null)
@@ -1090,25 +1237,89 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const [confirm, setConfirm] = useState(null)
       const [settingsId, setSettingsId] = useState(null)
       const [settingsSection, setSettingsSection] = useState('sources')
-      const [settingsDraft, setSettingsDraft] = useState({ name: '', description: '' })
+      const [settingsDraft, setSettingsDraft] = useState({ name: '', description: '', packIds: [] })
+      const [availablePacks, setAvailablePacks] = useState([])
       const [createSection, setCreateSection] = useState('info')
       const [menuId, setMenuId] = useState(null)
       const [browse, setBrowse] = useState('columns')
       const [wikiGroup, setWikiGroup] = useState(null)
       const [materialGroup, setMaterialGroup] = useState(null)
       const taskLive = Boolean(job && (job.status === 'running' || job.status === 'paused'))
+      const compileLive = Boolean(taskLive && job?.kind === 'compile')
+      const collectLive = Boolean(taskLive && job?.kind === 'collect')
       const fail = (err) => setError(messageOf(err, t))
       const scopeOf = (id) => ({ knowledgeBaseId: id })
+      const openProposalCount = (rows) => rows.filter((item) => !item.status || item.status === 'open').length
+      const beginCollectMarks = () => {
+        publishNavMark({ spinning: true })
+        setTabMarks((marks) => ({ ...marks, sources: { spinning: true } }))
+      }
+      const beginCompileMarks = () => {
+        publishNavMark({ spinning: true })
+        setTaskBaseline({ proposals: openProposalCount(proposals), pages: pages.length })
+        setTabMarks((marks) => ({ ...marks, materials: { spinning: true } }))
+        setMaterials((rows) => rows.map((item) => (
+          item.status === 'failed'
+            ? { ...item, status: 'captured', failureReason: undefined, decisionId: null }
+            : item
+        )))
+      }
+      const settleTaskMarks = (next, detail) => {
+        if (!next || next.status === 'cancelled') {
+          publishNavMark(null)
+          setTabMarks((marks) => {
+            const copy = { ...marks }
+            if (next?.kind === 'collect') delete copy.sources
+            if (next?.kind === 'compile') delete copy.materials
+            return copy
+          })
+          setTaskBaseline(null)
+          setJob(null)
+          return
+        }
+        if (next.kind === 'collect') {
+          const ok = next.status === 'done'
+          const affected = Number(next.result?.captured ?? 0) + Number(next.result?.reused ?? 0)
+          publishNavMark({ tone: ok ? 'ok' : 'error' })
+          setTabMarks((marks) => ({
+            ...marks,
+            sources: { tone: ok ? 'ok' : 'error' },
+            ...(ok && affected > 0 ? { materials: { count: affected } } : {}),
+          }))
+        } else if (next.kind === 'compile') {
+          const failed = Number(next.result?.failed ?? 0)
+          const tone = next.status === 'done' && failed === 0 ? 'ok' : 'error'
+          const pageDelta = Math.max(0, (detail?.pages?.length ?? pages.length) - Number(taskBaseline?.pages ?? 0))
+          const proposalDelta = Math.max(0, openProposalCount(detail?.proposals ?? proposals) - Number(taskBaseline?.proposals ?? 0))
+          publishNavMark({ tone })
+          setTabMarks((marks) => ({
+            ...marks,
+            materials: { tone },
+            ...(pageDelta > 0 ? { wiki: { count: pageDelta } } : {}),
+            ...(proposalDelta > 0 ? { proposals: { count: proposalDelta } } : {}),
+          }))
+        }
+        setTaskBaseline(null)
+        setJob(null)
+      }
       const load = async (id = baseId) => {
         setError('')
         const data = await takeCatalog(ctx)
         setBases(data.bases)
         setSources(data.sources)
-        setJob(data.task)
+        let nextJob = null
+        setJob((current) => {
+          nextJob = mergeTask(current, data.task)
+          return nextJob
+        })
+        if (nextJob && (nextJob.status === 'running' || nextJob.status === 'paused')) {
+          publishNavMark({ spinning: true })
+        }
         const detail = await takeDetail(ctx, id)
         setPages(detail.pages)
         setMaterials(detail.materials)
         setProposals(detail.proposals)
+        return detail
       }
       const reload = async (id = baseId) => {
         invalidateCatalog()
@@ -1122,19 +1333,35 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       }, [baseId])
       useEffect(() => {
         if (!taskLive) return undefined
+        let settled = false
         const timer = setInterval(() => {
-          call(ctx, '/wiki {"op":"task"}').then((result) => {
+          Promise.all([
+            call(ctx, '/wiki {"op":"task"}'),
+            compileLive ? takeDetail(ctx, baseId) : Promise.resolve(null),
+          ]).then(async ([result, detail]) => {
             const next = result.task ?? null
             setJob(next)
-            if (next && next.status !== 'running' && next.status !== 'paused') {
-              if (next.status === 'done' && next.kind === 'collect') setTab('materials')
-              if (next.status === 'done' && next.kind === 'compile') setTab('wiki')
-              publishBases()
+            if (detail) {
+              setPages(detail.pages)
+              setMaterials(detail.materials)
+              setProposals(detail.proposals)
             }
+            if (settled || !next || next.status === 'running' || next.status === 'paused') return
+            settled = true
+            const latest = detail || await takeDetail(ctx, baseId).catch(() => null)
+            if (latest) {
+              setPages(latest.pages)
+              setMaterials(latest.materials)
+              setProposals(latest.proposals)
+            }
+            settleTaskMarks(next, latest)
+            publishBases()
+            invalidateCatalog()
+            load(baseId).catch(fail)
           }).catch(() => {})
         }, 500)
         return () => clearInterval(timer)
-      }, [taskLive, baseId])
+      }, [taskLive, compileLive, baseId])
       useEffect(() => {
         if (!view && !showForm && !showCreate && !confirm && !settingsId && !materialFocus && !page && !menuId) return undefined
         const onKey = (event) => {
@@ -1165,8 +1392,15 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         if (!settingsId) return
         const found = bases.find((item) => item.id === settingsId)
         if (!found) return
-        setSettingsDraft({ name: found.name ?? '', description: found.description ?? '' })
+        setSettingsDraft({
+          name: found.name ?? '',
+          description: found.description ?? '',
+          packIds: Array.isArray(found.packIds) ? [...found.packIds] : [],
+        })
         setSettingsSection('sources')
+        call(ctx, '/wiki {"op":"listPacks"}')
+          .then((result) => setAvailablePacks(Array.isArray(result?.packs) ? result.packs : []))
+          .catch(() => setAvailablePacks([]))
       }, [settingsId])
       const openPage = async (slug) => {
         setError('')
@@ -1251,9 +1485,6 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         if (item.status === 'done' && item.kind === 'collect' && item.result) {
           return t('collected').replace('{captured}', String(item.result.captured ?? 0)).replace('{reused}', String(item.result.reused ?? 0))
         }
-        if (item.status === 'done' && item.kind === 'compile' && item.result) {
-          return t('compileResult').replace('{decided}', String(item.result.decided ?? 0)).replace('{failed}', String(item.result.failed ?? 0))
-        }
         if (item.status === 'done') return t('taskDone')
         if (item.status === 'cancelled') return t('taskCancelled')
         if (item.status === 'failed') return item.error || t('taskFailed')
@@ -1288,17 +1519,40 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       ))
       const shownMaterials = materials.filter((item) => materialFilter === 'all' || item.status === materialFilter)
       const pendingCompile = materials.filter((item) => item.status === 'captured' || item.status === 'failed').length
-      const jobControls = taskLive ? h('div', { className: 'lwiki-job-controls' },
-        job.status === 'paused'
-          ? h('button', { type: 'button', className: 'lwiki-btn', onClick: () => call(ctx, '/wiki {"op":"taskResume"}').then((result) => setJob(result.task)).catch(fail) }, t('resume'))
-          : h('button', { type: 'button', className: 'lwiki-btn', onClick: () => call(ctx, '/wiki {"op":"taskPause"}').then((result) => setJob(result.task)).catch(fail) }, t('pause')),
-        h('button', { type: 'button', className: 'lwiki-btn', onClick: () => call(ctx, '/wiki {"op":"taskCancel"}').then((result) => setJob(result.task)).catch(fail) }, t('stop')),
-      ) : null
-      const jobInline = job ? h('div', { className: 'lwiki-job-inline' },
+      const compileProgress = compileLive ? h('div', { className: 'lwiki-job-mid' },
         h('span', { className: 'lwiki-job-label', title: taskText(job) }, taskText(job)),
-        taskLive ? h('div', { className: 'lwiki-bar', 'data-indeterminate': job.total ? undefined : 'true' }, h('span', { style: job.total ? { width: taskWidth(job) } : undefined })) : null,
-        jobControls,
-      ) : null
+        h('div', { className: 'lwiki-bar', 'data-indeterminate': job.total ? undefined : 'true' }, h('span', { style: job.total ? { width: taskWidth(job) } : undefined })),
+        h('button', {
+          type: 'button',
+          className: 'lwiki-icon-btn',
+          'aria-label': t('stop'),
+          title: t('stop'),
+          onClick: () => call(ctx, '/wiki {"op":"taskCancel"}').then((result) => setJob(result.task)).catch(fail),
+        }, h(CloseIcon)),
+      ) : h('div', { className: 'lwiki-job-mid', 'aria-hidden': 'true' })
+      const materialStatusOf = (item) => {
+        if (compileLive && item.status === 'captured') {
+          const current = job.materialId && job.materialId === item.id
+          const byRef = !job.materialId && job.message && job.message === item.sourceRef
+          if (current || byRef) return 'compiling'
+        }
+        return item.status
+      }
+      const tabMarkNode = (id) => {
+        const mark = tabMarks[id]
+        if (!mark) return null
+        if (mark.spinning) return h('span', { className: 'lwiki-tab-spin' }, h(SpinnerIcon, { size: 10 }))
+        if (mark.count > 0) {
+          const text = mark.count > 99 ? '99+' : String(Math.floor(mark.count))
+          return h('span', { className: 'lwiki-tab-badge' }, text)
+        }
+        if (mark.tone) return h('span', { className: 'lwiki-tab-mark', 'data-tone': mark.tone })
+        return h('span', { className: 'lwiki-tab-mark' })
+      }
+      const scopeName = (label, description) => h('span', { className: 'lwiki-scope-label' },
+        h('span', null, label),
+        description ? h('span', { className: 'lwiki-scope-desc', title: description }, description) : null,
+      )
       const drawer = (titleId, title, bodyNode, foot, onClose, quiet) => h('div', {
         className: 'lwiki-drawer-mask',
         onClick: () => { if (busy === '' && !scopeBusy) onClose() },
@@ -1319,6 +1573,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const studioSections = [
         { group: t('groupBasic'), id: 'info', label: t('sectionInfo'), title: t('sectionInfo'), hint: t('sectionInfoHint') },
         { group: t('groupStore'), id: 'sources', label: t('sectionSources'), title: t('sectionSources'), hint: t('sectionSourcesHint') },
+        ...(!showCreate ? [{ group: t('groupStore'), id: 'packs', label: t('sectionPacks'), title: t('sectionPacks'), hint: t('sectionPacksHint') }] : []),
       ]
       const studio = (titleId, brand, current, setCurrent, bodyNode, foot, onClose) => {
         let seen = ''
@@ -1425,7 +1680,14 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         const files = [{ id: `${item.id}:table`, folder: t('folderTable'), title: table, meta: '', item, slice: 'table' }]
         for (const column of evidence.columns ?? []) {
           if (column.dictionary) {
-            files.push({ id: `${item.id}:dict:${column.name}`, folder: t('folderDict'), title: `${table}.${column.name}`, meta: column.comment || '', item, slice: 'dict', column })
+            const dictTitle = (() => {
+              const raw = String(column.comment ?? '').trim()
+              if (!raw) return column.name
+              let phrase = raw.split(/[：:]/)[0].trim().replace(/[（(].*$/, '').trim()
+              if (!phrase || phrase.toLowerCase() === String(column.name).toLowerCase()) return column.name
+              return phrase
+            })()
+            files.push({ id: `${item.id}:dict:${column.name}`, folder: t('folderDict'), title: dictTitle, meta: `${table}.${column.name}`, item, slice: 'dict', column })
           } else if (column.domain?.kind === 'values' && (column.domain.values?.length ?? 0) > 0) {
             files.push({ id: `${item.id}:domain:${column.name}`, folder: t('folderDomain'), title: `${table}.${column.name}`, meta: column.comment || '', item, slice: 'domain', column })
           }
@@ -1479,35 +1741,107 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         if (!baseId) return
         setMenuId(null)
         setError('')
+        setNotice('')
         try {
+          beginCollectMarks()
           const result = await call(ctx, `/wiki ${JSON.stringify({ op: 'collect', datasourceId: row.id, ...scopeOf(baseId) })}`)
           setJob(result.task)
+          invalidateCatalog()
           await load(baseId)
         } catch (err) {
+          setTabMarks((marks) => {
+            const copy = { ...marks }
+            delete copy.sources
+            return copy
+          })
           fail(err)
         }
       }
       const typeLetter = (type) => (type === 'mysql' ? 'M' : type === 'postgresql' ? 'P' : String(type || '?').slice(0, 1).toUpperCase())
       const typeName = (type) => (type === 'mysql' ? 'MySQL' : type === 'postgresql' ? 'PostgreSQL' : String(type || ''))
       const connectLabel = (connection) => (connection?.status === 'failed' ? t('connectFailed') : connection?.status === 'ok' ? t('connectOk') : t('connectUnknown'))
-      const sourceCard = (row, opts) => h('div', { className: 'lwiki-kb-shell', key: row.id },
-        h('button', {
-          type: 'button', className: 'lwiki-ds',
-          disabled: opts.disabled || undefined,
-          'aria-pressed': opts.disabled ? 'false' : (opts.pressed ? 'true' : 'false'),
-          onClick: opts.disabled ? undefined : opts.onOpen,
-        },
-          h('span', { className: 'lwiki-badge' }, typeLetter(row.type)),
-          h('span', { className: 'lwiki-kb-title' }, row.name),
-          h('span', { className: 'lwiki-ds-line' },
-            h('span', null, typeName(row.type)),
-            h('span', { className: 'lwiki-ds-dot', 'data-tone': row.connection?.status === 'failed' ? 'error' : row.connection?.status === 'ok' ? 'ok' : undefined }),
-            h('span', null, connectLabel(row.connection)),
-          ),
-          h('span', { className: 'lwiki-ds-meta' }, opts.meta || `${row.host}:${row.port}/${row.database}`),
-        ),
-        opts.menu || null,
+      const connectTone = (connection) => (connection?.status === 'failed' ? 'error' : connection?.status === 'ok' ? 'ok' : undefined)
+      const statusChip = (label, tone) => h('span', { className: 'lwiki-ds-status', 'data-tone': tone || undefined },
+        h('span', { className: 'lwiki-ds-dot', 'aria-hidden': 'true' }),
+        h('span', null, label),
       )
+      const collectPhaseLabel = (phase) => {
+        if (phase === 'catalog') return t('collectPhaseCatalog')
+        if (phase === 'count') return t('collectPhaseCount')
+        if (phase === 'profile') return t('collectPhaseProfile')
+        return t('taskCollect')
+      }
+      const collectProgressDetail = (progress) => {
+        if (!progress) return ''
+        const total = Number(progress.total) || 0
+        const done = Number(progress.done) || 0
+        const current = Number(progress.current) || (total > 0 ? Math.min(Math.max(done, 1), total) : 0)
+        const phase = collectPhaseLabel(progress.phase)
+        const raw = String(progress.message ?? '').trim()
+        let detail = ''
+        if (progress.phase === 'profile' && raw) detail = t('collectTable').replace('{table}', raw)
+        else if (raw) detail = raw.replace(/^读取结构\s*[·•]?\s*/, '').replace(/^统计行数\s*[·•]?\s*/, '') || raw
+        if (total > 0) {
+          return t('collectProgressDetail')
+            .replace('{current}', String(current))
+            .replace('{total}', String(total))
+            .replace('{phase}', phase)
+            .replace('{detail}', detail)
+            .replace(/\s+/g, ' ')
+            .trim()
+        }
+        return [phase, detail].filter(Boolean).join(' ')
+      }
+      const collectBarWidth = (progress) => {
+        const total = Number(progress?.total) || 0
+        if (total <= 0) return '0%'
+        const done = Number(progress.done) || 0
+        return `${Math.min(100, Math.round((done / total) * 100))}%`
+      }
+      const sourceCard = (row, opts) => {
+        const progress = opts.progress
+        const collecting = Boolean(progress && (progress.status === 'running' || progress.status === 'paused'))
+        const detail = collecting ? collectProgressDetail(progress) : (opts.detail || opts.meta || '')
+        return h('div', { className: 'lwiki-kb-shell', key: row.id },
+          h('button', {
+            type: 'button', className: 'lwiki-ds',
+            disabled: opts.disabled || undefined,
+            'data-collecting': collecting ? 'true' : undefined,
+            'aria-pressed': opts.disabled ? 'false' : (opts.pressed ? 'true' : 'false'),
+            'aria-busy': collecting ? 'true' : undefined,
+            onClick: opts.disabled ? undefined : opts.onOpen,
+          },
+            h('span', { className: 'lwiki-badge' }, typeLetter(row.type)),
+            h('span', { className: 'lwiki-kb-title' }, row.name),
+            h('span', { className: 'lwiki-ds-line' },
+              h('span', { className: 'lwiki-ds-type' }, typeName(row.type)),
+              statusChip(connectLabel(row.connection), connectTone(row.connection)),
+              opts.collectLabel ? statusChip(opts.collectLabel, opts.collectTone) : null,
+            ),
+            h('span', { className: 'lwiki-ds-foot' },
+              collecting ? h('span', { className: 'lwiki-ds-progress' },
+                detail ? h('span', { className: 'lwiki-ds-detail' }, detail) : null,
+                h('span', { className: 'lwiki-ds-progress-row' },
+                  h('div', { className: 'lwiki-bar', 'aria-hidden': 'true' },
+                    h('span', { style: { width: collectBarWidth(progress) } }),
+                  ),
+                  h('button', {
+                    type: 'button',
+                    className: 'lwiki-icon-btn lwiki-ds-cancel',
+                    'aria-label': t('stop'),
+                    title: t('stop'),
+                    onClick: (event) => {
+                      event.stopPropagation()
+                      call(ctx, '/wiki {"op":"taskCancel"}').then((result) => setJob(result.task)).catch(fail)
+                    },
+                  }, h(CloseIcon)),
+                ),
+              ) : (detail ? h('span', { className: 'lwiki-ds-detail' }, detail) : null),
+            ),
+          ),
+          opts.menu || null,
+        )
+      }
       const wizardSteps = mode === 'defaults'
         ? (sourceMode === 'edit'
           ? [['config', t('stepConfig')], ['scope', t('stepScope')]]
@@ -1545,7 +1879,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           setShowForm(false)
           setEditingId(null)
           setBaseline(null)
-          setNotice(t('saved'))
+          flashNotice(t('saved'))
           await reload(null)
           return
         }
@@ -1559,7 +1893,11 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
             await call(ctx, `/wiki ${JSON.stringify({ op: 'bind', id: wizardBase.id, datasourceId: id })}`)
           }
           await call(ctx, `/wiki ${JSON.stringify({ op: 'setScope', id: wizardBase.id, datasourceId: id, tables })}`)
-          if (syncNow) await call(ctx, `/wiki ${JSON.stringify({ op: 'collect', datasourceId: id, knowledgeBaseId: wizardBase.id })}`)
+          if (syncNow) {
+            beginCollectMarks()
+            const result = await call(ctx, `/wiki ${JSON.stringify({ op: 'collect', datasourceId: id, knowledgeBaseId: wizardBase.id })}`)
+            setJob(result.task)
+          }
           await reload(baseId || wizardBase.id)
         } else {
           setBaseDraft((current) => ({
@@ -1573,7 +1911,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         setShowForm(false)
         setEditingId(null)
         setBaseline(null)
-        setNotice(t('saved'))
+        flashNotice(t('saved'))
       }
       const takenIds = new Set(showCreate ? (baseDraft.datasourceIds ?? []) : (wizardBase?.datasourceIds ?? []))
       const configKey = configFingerprint(form)
@@ -1683,6 +2021,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const saveSync = async () => {
         if (!stepDirty('sync')) return true
         if (syncNow && wizardBase) {
+          beginCollectMarks()
           const result = await call(ctx, `/wiki ${JSON.stringify({ op: 'collect', datasourceId: editingId, knowledgeBaseId: wizardBase.id })}`)
           setJob(result.task)
         } else if (!wizardBase) {
@@ -1857,7 +2196,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
             setShowForm(false)
             setEditingId(null)
             setBaseline(null)
-            setNotice(t('saved'))
+            flashNotice(t('saved'))
             await reload(mode === 'defaults' || !wizardBase ? null : (baseId || wizardBase.id))
             return
           }
@@ -1865,7 +2204,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           const ok = wizardStep === 'config' ? await saveConfig() : wizardStep === 'scope' ? await saveScope() : await saveSync()
           if (!ok) return
           if (wasDirty) {
-            setNotice(t('saved'))
+            flashNotice(t('saved'))
             await reload(mode === 'defaults' || !wizardBase ? null : (baseId || wizardBase.id))
           }
           const next = wizardSteps[wizardIndex + 1]?.[0]
@@ -1943,7 +2282,10 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           setCatalog((current) => ({
             database: current.database,
             connectionKey: current.connectionKey,
-            siblings: (current.siblings ?? []).filter((name) => !loaded.has(name)),
+            siblings: (current.siblings ?? []).filter((sibling) => {
+              const id = typeof sibling === 'string' ? sibling : sibling?.id
+              return id && !loaded.has(id)
+            }),
             groups: [...(current.groups ?? []), ...extraGroups],
           }))
         }
@@ -1998,7 +2340,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                     ref: (el) => { if (el) el.indeterminate = some },
                     onChange: () => { setFollowDefault(false); setPicked((current) => all ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]) },
                   }),
-                  row.label,
+                  scopeName(row.label, row.description),
                 ),
               ),
               open ? h('div', { className: 'lwiki-tree' }, row.tables.map((table) => h('label', { className: 'lwiki-check', key: table.id },
@@ -2006,7 +2348,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                   type: 'checkbox', checked: picked.includes(table.id),
                   onChange: () => { setFollowDefault(false); setPicked((current) => current.includes(table.id) ? current.filter((id) => id !== table.id) : [...current, table.id]) },
                 }),
-                table.label,
+                scopeName(table.label, table.description),
               ))) : null,
             )
           }),
@@ -2119,7 +2461,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           type: 'checkbox', checked: dbDraft.includes(row.id),
           onChange: () => setDbDraft((current) => current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id]),
         }),
-        h('span', null, row.label),
+        scopeName(row.label, row.description),
         row.isDefault ? h('span', { className: 'lwiki-card-meta' }, t('defaultDatabase')) : null,
       ))) : null,
       ) : null
@@ -2160,7 +2502,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                   if (pending.kind === 'unbind') {
                     setShowForm(false)
                     setEditingId(null)
-                    setNotice(t('unbound'))
+                    flashNotice(t('unbound'))
                   }
                   if (pending.kind === 'material' && materialFocus === pending.id) setMaterialFocus(null)
                   if (pending.kind === 'clear') setMaterialFocus(null)
@@ -2169,13 +2511,45 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                     if (baseId === pending.id) setBaseId(null)
                     publishBases()
                   }
-                  if (pending.kind === 'source') setNotice(t('removed'))
+                  if (pending.kind === 'source') flashNotice(t('removed'))
                   return load(pending.kind === 'base' ? null : baseId)
                 }).catch(fail).finally(() => setBusy(''))
               },
             }, confirm.kind === 'base' ? t('removeBase') : confirm.kind === 'source' ? t('remove') : confirm.kind === 'clear' ? t('clearMaterials') : confirm.kind === 'material' ? t('removeMaterial') : t('unbind')),
           ),
         ), () => setConfirm(null)) : null
+      const failureStageOf = (reason) => {
+        const text = String(reason || '')
+        if (/^project failed:/i.test(text)) return 'project'
+        if (/page belongs to another knowledge base|new decision targets|update decision targets|decision invalid/i.test(text)) return 'apply'
+        return 'compile'
+      }
+      const failurePanel = (item) => {
+        if (!item || item.status !== 'failed') return null
+        const stage = failureStageOf(item.failureReason)
+        const steps = [
+          ['compile', t('failStageCompile')],
+          ['apply', t('failStageApply')],
+          ['project', t('failStageProject')],
+        ]
+        const order = { compile: 0, apply: 1, project: 2 }
+        const failedAt = order[stage] ?? 0
+        return h('section', { className: 'lwiki-fail', 'aria-label': t('failDetailTitle') },
+          h('h3', { className: 'lwiki-fail-title' }, t('failDetailTitle')),
+          h('p', { className: 'lwiki-fail-label' }, t('failProcess')),
+          h('ol', { className: 'lwiki-fail-steps' }, steps.map(([id, label], index) => {
+            const state = index < failedAt ? 'done' : index === failedAt ? 'failed' : 'pending'
+            const mark = state === 'done' ? '✓' : state === 'failed' ? '✗' : '·'
+            return h('li', { key: id, className: 'lwiki-fail-step', 'data-state': state },
+              h('span', { className: 'lwiki-fail-mark', 'aria-hidden': 'true' }, mark),
+              h('span', null, label),
+            )
+          })),
+          h('p', { className: 'lwiki-fail-label' }, t('failReason')),
+          h('pre', { className: 'lwiki-fail-reason' }, item.failureReason || t('failUnknown')),
+          h('p', { className: 'lwiki-fail-hint' }, t('failHint')),
+        )
+      }
       const viewDialog = view ? drawer('lwiki-view-title', view.title,
         h('div', null,
           view.slug && view.kind === 'review' ? h('p', { className: 'lwiki-meta' }, view.slug) : null,
@@ -2266,11 +2640,38 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         const inherited = (tables) => (tables?.length ? databaseCountText(tables) : (row.scope?.tables?.length ? t('scopeInherited') : t('scopeDefault')))
         if (showCreate) return inherited(baseDraft.scopes?.[row.id])
         const saved = settingsBase?.collects?.[String(row.id)]
-        const collect = saved?.state === 'done' ? t('collectedDone') : saved?.state === 'failed' ? t('taskFailed') : saved?.state === 'cancelled' ? t('taskCancelled') : t('collectNone')
+        const collect = saved?.state === 'done' ? t('collectOk') : saved?.state === 'failed' ? t('collectFail') : saved?.state === 'cancelled' ? t('taskCancelled') : t('collectNone')
         const tables = settingsBase?.scopes?.[String(row.id)]?.tables
         const scope = inherited(tables)
         return `${collect} · ${scope}`
       }
+      const packsEditor = !showCreate && editorSection === 'packs' ? h('div', { className: 'lwiki-settings-form' },
+        availablePacks.length === 0
+          ? h('p', { className: 'lwiki-empty' }, t('packNone'))
+          : availablePacks.map((pack) => {
+            const id = String(pack.id)
+            const checked = settingsDraft.packIds.includes(id)
+            return h('label', { key: id, className: 'lwiki-field', style: { flexDirection: 'row', alignItems: 'center', gap: 8 } },
+              h('input', {
+                type: 'checkbox',
+                checked,
+                onChange: () => {
+                  const next = checked
+                    ? settingsDraft.packIds.filter((item) => item !== id)
+                    : [...settingsDraft.packIds, id]
+                  setSettingsDraft({ ...settingsDraft, packIds: next })
+                  setBusy('packs')
+                  setError('')
+                  call(ctx, `/wiki ${JSON.stringify({ op: 'setPacks', id: settingsBase.id, packIds: next })}`)
+                    .then(() => { flashNotice(t('saved')); return load(baseId) })
+                    .catch(fail)
+                    .finally(() => setBusy(''))
+                },
+              }),
+              h('span', null, pack.title || id),
+            )
+          }),
+      ) : null
       const baseDialog = editorOpen ? studio(showCreate ? 'lwiki-create-title' : 'lwiki-settings-title', showCreate ? t('createTitle') : t('baseConfig'), editorSection, setEditorSection,
         editorSection === 'info' ? h('div', { className: 'lwiki-settings-form' },
           h('label', { className: 'lwiki-field' },
@@ -2289,12 +2690,12 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
               onChange: (event) => (showCreate ? setBaseDraft({ ...baseDraft, description: event.target.value }) : setSettingsDraft({ ...settingsDraft, description: event.target.value })),
             }),
           ),
-        ) : h('div', { className: 'lwiki-grid' },
+        ) : editorSection === 'packs' ? packsEditor : h('div', { className: 'lwiki-grid' },
           editorSources.map((row) => sourceCard(row, { meta: editorMeta(row), onOpen: () => openEdit(row) })),
           h('button', { type: 'button', className: 'lwiki-source-add', onClick: openAdd }, h(PlusIcon), h('span', null, t('addSourceCard'))),
         ),
         h(React.Fragment, null,
-          h('span', { className: 'lwiki-card-meta' }, !showCreate && editorSection === 'sources' ? t('settingsLive') : ''),
+          h('span', { className: 'lwiki-card-meta' }, !showCreate && editorSection === 'sources' ? t('settingsLive') : (!showCreate && editorSection === 'packs' ? t('packsLive') : '')),
           h('div', { className: 'lwiki-actions' },
             showCreate ? h('button', { type: 'button', className: 'lwiki-btn', onClick: () => setShowCreate(false) }, t('cancel')) : null,
             showCreate ? h('button', {
@@ -2316,6 +2717,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                   setBaseId(created.base.id)
                   publishBases()
                   if (collectId) {
+                    beginCollectMarks()
                     const result = await call(ctx, `/wiki ${JSON.stringify({ op: 'collect', datasourceId: collectId, knowledgeBaseId: created.base.id })}`)
                     setJob(result.task)
                   }
@@ -2332,7 +2734,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                 setBusy('settings')
                 setError('')
                 call(ctx, `/wiki ${JSON.stringify({ op: 'baseUpdate', id: settingsBase.id, name: settingsDraft.name.trim(), description: settingsDraft.description.trim() })}`)
-                  .then(() => { setNotice(t('saved')); return load(baseId) })
+                  .then(() => { flashNotice(t('saved')); return load(baseId) })
                   .catch(fail)
                   .finally(() => setBusy(''))
               },
@@ -2345,6 +2747,19 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const tabHint = { sources: t('stepSources'), materials: t('stepMaterials'), wiki: t('stepWiki'), proposals: t('stepProposals') }
       const selectTab = (id) => {
         setTab(id)
+        setNotice('')
+        if (noticeTimer.current) {
+          window.clearTimeout(noticeTimer.current)
+          noticeTimer.current = 0
+        }
+        setTabMarks((marks) => {
+          const mark = marks[id]
+          // 处理中转圈不能点 Tab 清掉；只清完成态的绿/红点与数量角标。
+          if (!mark || mark.spinning) return marks
+          const copy = { ...marks }
+          delete copy[id]
+          return copy
+        })
         if (id !== 'wiki') setPage(null)
         if (id !== 'materials') setMaterialFocus(null)
         if (id !== 'proposals') setView(null)
@@ -2445,10 +2860,13 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       )
       }
       const collectStateOf = (id) => {
+        const sameSource = job?.datasourceId == null || Number(job.datasourceId) === Number(id)
         const forThisBase = job?.kind === 'collect'
-          && (job.datasourceId == null || job.datasourceId === id)
+          && sameSource
           && (!job.knowledgeBaseId || job.knowledgeBaseId === baseId)
-        if (forThisBase && (job.status === 'running' || job.status === 'paused')) return { state: 'running' }
+        if (forThisBase && (job.status === 'running' || job.status === 'paused')) {
+          return { state: job.status === 'paused' ? 'paused' : 'running', job }
+        }
         if (forThisBase && job.status === 'failed') return { state: 'failed', error: job.error }
         if (forThisBase && job.status === 'cancelled') return { state: 'cancelled' }
         if (forThisBase && job.status === 'done') return { state: 'done' }
@@ -2457,20 +2875,34 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         if (materials.some((item) => item.datasourceId === id)) return { state: 'done' }
         return null
       }
-      const collectText = (state) => {
+      const collectLabelOf = (state) => {
         if (!state) return t('collectNone')
-        if (state.state === 'running') return t('taskCollect')
-        if (state.state === 'done') return t('collectedDone')
-        if (state.state === 'failed') return t('taskFailed')
+        if (state.state === 'running' || state.state === 'paused') return t('taskCollect')
+        if (state.state === 'done') return t('collectOk')
+        if (state.state === 'failed') return t('collectFail')
         if (state.state === 'cancelled') return t('taskCancelled')
         return t('collectNone')
+      }
+      const collectToneOf = (state) => {
+        if (state?.state === 'running' || state?.state === 'paused') return 'active'
+        if (state?.state === 'done') return 'ok'
+        if (state?.state === 'failed') return 'error'
+        return undefined
+      }
+      const cardScopeDetail = (row) => {
+        const own = selected?.scopes?.[String(row.id)]?.tables
+        if (own?.length) return databaseCountText(own)
+        const inherited = row.scope?.tables
+        if (inherited?.length) return `${databaseCountText(inherited)} · ${t('scopeDefaultTag')}`
+        const db = row.database || t('defaultDatabase')
+        return `${db} · ${t('scopeDefaultTag')}`
       }
       const dirRow = (key, current, label, count, onClick, open) => h('button', {
         key, type: 'button', className: 'lwiki-dir-row', 'aria-current': current ? 'page' : undefined,
         'aria-expanded': open == null ? undefined : (open ? 'true' : 'false'),
         onClick,
       }, open == null ? null : h(Caret, { open }), h(FolderIcon), h('span', { className: 'lwiki-row-label' }, label), h('span', { className: 'lwiki-status' }, String(count)))
-      const toneOf = (status) => (status === 'published' || status === 'decided' ? 'ok' : status === 'failed' ? 'error' : '')
+      const toneOf = (status) => (status === 'published' || status === 'decided' ? 'ok' : status === 'failed' ? 'error' : status === 'compiling' ? 'active' : '')
       const docRow = (key, current, title, meta, tag, status, tone, onClick, compact) => h('li', { key },
         h('button', {
           type: 'button', className: compact ? 'lwiki-doc' : 'lwiki-doc lwiki-doc-row',
@@ -2506,7 +2938,8 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const materialLeafRow = (file, compact) => {
         const when = formatWhen(file.item.updatedAt || file.item.createdAt || '')
         const meta = compact ? file.meta : [when, file.meta].filter(Boolean).join(' · ')
-        return docRow(file.id, materialFocus === file.id, file.title, meta, file.folder, labelOf(t, file.item.status), toneOf(file.item.status), () => setMaterialFocus(file.id), compact)
+        const status = materialStatusOf(file.item)
+        return docRow(file.id, materialFocus === file.id, file.title, meta, file.folder, labelOf(t, status), toneOf(status), () => setMaterialFocus(file.id), compact)
       }
       const pageTitleText = page?.title || page?.slug || ''
       const editedAt = page?.published?.editedAt || page?.draft?.editedAt || ''
@@ -2600,12 +3033,12 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
             h('h2', { className: 'lwiki-article-title' }, file.title),
             h('div', { className: 'lwiki-pills' },
               h('span', { className: 'lwiki-pill' }, file.folder),
-              h('span', { className: 'lwiki-pill' }, labelOf(t, file.item.status)),
+              h('span', { className: 'lwiki-pill' }, labelOf(t, materialStatusOf(file.item))),
             ),
           ),
           (file.item.updatedAt || file.item.createdAt) ? h('time', { className: 'lwiki-article-time', dateTime: file.item.updatedAt || file.item.createdAt }, formatWhen(file.item.updatedAt || file.item.createdAt)) : null,
         ),
-        file.item.failureReason && (file.slice === 'table' || file.slice === 'all') ? h('p', { className: 'lwiki-meta' }, file.item.failureReason) : null,
+        (file.slice === 'table' || file.slice === 'all') ? failurePanel(file.item) : null,
         h('div', { className: 'lwiki-md' }, renderMarkdown(withoutTitle(fileMarkdown(file), file.title), openWikiLink)),
       ) : h('p', { className: 'lwiki-empty' }, t('readerEmptyMaterial'))
       const removeMaterialButton = focusedFile && (focusedFile.slice === 'table' || focusedFile.slice === 'all') ? h('button', {
@@ -2673,10 +3106,12 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           h('div', { className: 'lwiki-tabs', role: 'tablist' },
             tabs.map(([id, label, count]) => h('button', {
               key: id, type: 'button', className: 'lwiki-tab', role: 'tab', title: tabHint[id], 'aria-selected': tab === id ? 'true' : 'false', onClick: () => selectTab(id),
-            }, `${label} ${count}`)),
+            },
+              h('span', null, `${label} ${count}`),
+              tabMarkNode(id),
+            )),
             h('button', { type: 'button', className: 'lwiki-icon-btn', 'aria-label': t('settings'), onClick: () => setSettingsId(baseId) }, h(GearIcon)),
           ),
-          jobInline,
         ),
         h('div', { className: 'lwiki-main' },
           error ? h('p', { className: 'lwiki-error', role: 'alert' }, error) : null,
@@ -2684,13 +3119,14 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           tab === 'materials' ? h('div', { className: 'lwiki-toolbar' },
             h('div', { className: 'lwiki-filters' }, [
               ['all', t('filterAll'), materials.length],
-              ['captured', t('captured'), materials.filter((item) => item.status === 'captured').length],
+              ['captured', t('captured'), materials.filter((item) => item.status === 'captured' || materialStatusOf(item) === 'compiling').length],
               ['decided', t('decided'), materials.filter((item) => item.status === 'decided').length],
               ['failed', t('failed'), materials.filter((item) => item.status === 'failed').length],
             ].map(([id, label, count]) => h('button', {
               key: id, type: 'button', className: 'lwiki-chip', 'aria-pressed': materialFilter === id ? 'true' : 'false',
               onClick: () => setMaterialFilter(id),
             }, `${label} ${count}`))),
+            compileProgress,
             h('div', { className: 'lwiki-actions' },
               modeToggle,
               h('button', {
@@ -2698,13 +3134,20 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
                 onClick: () => {
                   setNotice('')
                   setError('')
-                  call(ctx, `/wiki ${JSON.stringify({ op: 'compile', ...scopeOf(baseId) })}`).then((result) => setJob(result.task)).catch(fail)
+                  beginCompileMarks()
+                  call(ctx, `/wiki ${JSON.stringify({ op: 'compile', ...scopeOf(baseId) })}`).then((result) => {
+                    setJob(result.task)
+                    return load(baseId)
+                  }).catch((err) => {
+                    setTabMarks((marks) => {
+                      const copy = { ...marks }
+                      delete copy.materials
+                      return copy
+                    })
+                    fail(err)
+                  })
                 },
-              }, pendingCompile > 0 ? `${t('compile')} ${pendingCompile}` : t('compile')),
-              h('button', {
-                type: 'button', className: 'lwiki-btn', disabled: busy !== '' || taskLive || materials.length === 0,
-                onClick: () => setConfirm({ kind: 'clear', name: selected?.name || '' }),
-              }, t('clearMaterials')),
+              }, t('compile')),
             ),
           ) : null,
           tab === 'wiki' ? h('div', { className: 'lwiki-toolbar' },
@@ -2714,10 +3157,13 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
           h('div', { className: 'lwiki-list-scroll' },
           tab === 'sources' ? h('div', { className: 'lwiki-grid' }, bound.map((row) => {
               const menuKey = `ds:${row.id}`
-              const tables = selected?.scopes?.[String(row.id)]?.tables
-              const scope = tables?.length ? databaseCountText(tables) : (row.scope?.tables?.length ? t('scopeInherited') : t('scopeDefault'))
+              const collectState = collectStateOf(row.id)
+              const collecting = collectState?.state === 'running' || collectState?.state === 'paused'
               return sourceCard(row, {
-                meta: `${collectText(collectStateOf(row.id))} · ${scope}`,
+                collectLabel: collectLabelOf(collectState),
+                collectTone: collectToneOf(collectState),
+                detail: collecting ? undefined : cardScopeDetail(row),
+                progress: collecting ? collectState.job : null,
                 onOpen: () => { setMenuId(null); openEdit(row) },
                 menu: h(React.Fragment, null,
                   h('button', {

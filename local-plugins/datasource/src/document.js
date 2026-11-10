@@ -2,6 +2,7 @@
  * 一张表的值域、字典标记和可关联字段。阈值只在这里。
  * 输入是已经采样的行，不访问数据库。
  */
+import { primaryCommentPhrase } from '@local/contracts'
 import { sketch, resemblance, containment } from './minhash.js'
 
 export const RELATION_RULES = Object.freeze({
@@ -42,10 +43,31 @@ export function buildTableFacts(meta, sample, policy = {}) {
     meta,
     columns: built.map((item) => item.column),
     keys: built.map((item) => item.key).filter(Boolean),
-    terms: [],
+    terms: extractColumnTerms(meta.columns ?? []),
     sampleMode: sample.sampleMode,
     sampleRows: rows.length,
   }
+}
+
+/**
+ * 从列注释启发式抽出业务说法，供 termHint → biz_label 投影。
+ * @param {{name: string, comment?: string|null}[]} columns
+ * @returns {{term: string, column: string}[]}
+ */
+export function extractColumnTerms(columns) {
+  const out = []
+  const seen = new Set()
+  for (const column of columns) {
+    const name = String(column?.name ?? '')
+    if (!name) continue
+    const term = primaryCommentPhrase(column.comment, name)
+    if (!term) continue
+    const key = `${term}\0${name}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ term, column: name })
+  }
+  return out
 }
 
 /**

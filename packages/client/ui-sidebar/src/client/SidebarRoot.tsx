@@ -74,6 +74,7 @@ function PanelRow({
   id, label, wide, unpinLabel, unpinTooltip, canUnpin, usePanelInfo, selectPanel, setPinned, trackEntryClick, renderFactorySlot,
 }: PanelRowProps) {
   const active = usePanelInfo(info => info.activePanelId === id)
+  const accessory = renderFactorySlot('sidebar.panel.accessory', { id, size: 12, active, wide })
   return (
     <div className={clsx(css.panelEntry, wide && css.panelEntryWide, active && css.panelEntryActive)}>
       <Tooltip label={label} delayMs={500} disabled={wide}>
@@ -96,8 +97,18 @@ function PanelRow({
               {label}
             </span>
           )}
+          {wide && accessory ? (
+            <span className={css.panelAccessory} aria-hidden="true">
+              {accessory}
+            </span>
+          ) : null}
         </button>
       </Tooltip>
+      {!wide && accessory ? (
+        <span className={css.panelAccessoryCollapsed} aria-hidden="true">
+          {accessory}
+        </span>
+      ) : null}
       {wide && canUnpin && <Tooltip label={unpinTooltip} side="bottom" align="end" delayMs={500} portal>
         <button type="button" className={css.panelUnpin} aria-label={unpinLabel} onClick={(event) => {
           // Unpin is rendered only while this navigation also renders More.

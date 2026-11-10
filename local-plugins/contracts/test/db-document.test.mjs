@@ -67,6 +67,7 @@ test('table document keeps every column, comment and measured range', () => {
   assert.doesNotMatch(body, /13800138000/)
   assert.doesNotMatch(body, /高频值/)
   const dict = renderDictionary(evidence, evidence.columns[1])
+  assert.match(dict, /^# 订单状态\n/)
   assert.match(dict, /\| PAID \| 4 \| 66\.7% \|/)
 })
 
@@ -100,7 +101,7 @@ test('compile publishes the measured pages and holds a weak relation for review'
       },
     ],
   }
-  const decisions = compileDbDocument({ id: 'raw_abc123', evidence: review }, { hasPage: () => false })
+  const decisions = compileDbDocument({ id: 'raw_abc123', evidence: review }, { hasPage: () => false, knowledgeBaseId: 'kb_demo' })
   const slugs = decisions.map((item) => item.slug)
   assert.ok(slugs.includes('entity/ca_fee_order'))
   assert.ok(slugs.includes('concept/ca_fee_order_order_status'))
@@ -114,8 +115,11 @@ test('compile publishes the measured pages and holds a weak relation for review'
   assert.match(held.review.brief, /接受会把这层关联写成一页/)
   assert.equal(held.review.publish.slug, held.slug)
   assert.equal(held.review.publish.confidence, 0.95)
+  assert.equal(held.review.objectId, 'tech_rel:kb_demo:ca_fee_order.project_id->project.id')
   assert.match(held.body, /\| 区分度 \| — \| 1\.00 \|/)
   assert.equal(decisions.find((item) => item.slug === 'entity/ca_fee_order').confidence, 0.95)
+  const dict = decisions.find((item) => item.slug === 'concept/ca_fee_order_order_status')
+  assert.match(dict.body, /^# 订单状态\n/)
   const again = compileDbDocument({ id: 'raw_abc123', evidence }, { hasPage: (slug) => slug === 'entity/ca_fee_order' })
   assert.equal(again.find((item) => item.slug === 'entity/ca_fee_order').action, 'update')
 })
@@ -165,6 +169,7 @@ test('a rare value stays visible instead of rounding to 0%', () => {
       ],
     },
   })
+  assert.match(dict, /^# fee_locked\n/)
   assert.match(dict, /\| Y \| 4 \| 0\.04% \|/)
   assert.match(dict, /\| N \| 1 \| <0\.1% \|/)
 })

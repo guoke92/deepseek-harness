@@ -6,6 +6,31 @@ import { SCHEMA_VERSION } from './common.js'
 import { isSlug } from './slug.js'
 import { validateDecision } from './decisions.js'
 
+/**
+ * 关联技术对象的稳定 id，与投影 hit / review.objectId 共用。
+ * @param {string} knowledgeBaseId
+ * @param {{fromTable: string, fromColumn: string, toTable: string, toColumn: string}} rel
+ */
+export function associationObjectId(knowledgeBaseId, rel) {
+  return `tech_rel:${knowledgeBaseId}:${rel.fromTable}.${rel.fromColumn}->${rel.toTable}.${rel.toColumn}`
+}
+
+/**
+ * 列注释主短语：取第一个全角/半角冒号前段，去掉括号尾注。
+ * 空、或与列名相同（忽略大小写）时返回空串，调用方回退到列名。
+ * @param {unknown} comment
+ * @param {string} [columnName]
+ */
+export function primaryCommentPhrase(comment, columnName = '') {
+  const raw = String(comment ?? '').trim()
+  if (!raw) return ''
+  let phrase = raw.split(/[：:]/)[0].trim()
+  phrase = phrase.replace(/[（(].*$/, '').trim()
+  if (!phrase) return ''
+  if (columnName && phrase.toLowerCase() === String(columnName).toLowerCase()) return ''
+  return phrase
+}
+
 export const DB_EVIDENCE_KIND = 'db.table'
 export const DB_FACT_CONFIDENCE = 0.95
 
@@ -146,7 +171,8 @@ export function renderDbTable(evidence) {
  * @returns {string}
  */
 export function renderDictionary(evidence, column) {
-  const lines = [`# ${column.name}`, '', `来自 ${evidence.table}.${column.name}。`]
+  const title = primaryCommentPhrase(column.comment, column.name) || column.name
+  const lines = [`# ${title}`, '', `来自 ${evidence.table}.${column.name}。`]
   if (column.comment) lines.push(`注释：${column.comment}`)
   lines.push('', '| 取值 | 次数 | 占比 |', '| --- | --- | --- |')
   for (const item of column.domain?.values ?? []) {
@@ -231,7 +257,7 @@ export function relationBasis(rel) {
  * 由一张表的证据生成决策。没有 db.table 证据时返回 null。
  * 已有页面用 update。未达阈值的关系只生成复核提议。
  * @param {object} material
- * @param {{hasPage?: (slug: string) => boolean, hasOpenProposal?: (slug: string) => boolean}} [ctx]
+ * @param {{hasPage?: (slug: string) => boolean, hasOpenProposal?: (slug: string) => boolean, knowledgeBaseId?: string}} [ctx]
  * @returns {object[]|null}
  */
 export function compileDbDocument(material, ctx = {}) {
@@ -241,6 +267,7 @@ export function compileDbDocument(material, ctx = {}) {
   if (!checked.ok) throw new Error(checked.errors.join('; '))
   const hasPage = ctx.hasPage ?? (() => false)
   const hasOpenProposal = ctx.hasOpenProposal ?? (() => false)
+  const knowledgeBaseId = typeof ctx.knowledgeBaseId === 'string' && ctx.knowledgeBaseId ? ctx.knowledgeBaseId : ''
   const slugs = pageSlugs(evidence)
   const decisions = []
   const entityBody = renderDbTable(evidence)
@@ -259,6 +286,7 @@ export function compileDbDocument(material, ctx = {}) {
     if (rel.verdict === 'review') {
       if (hasPage(slug) || hasOpenProposal(slug)) continue
       const page = factDecision(slug, 'relation', renderRelation(rel), material.id, false, '包含率未达到外键阈值')
+      const objectId = knowledgeBaseId ? associationObjectId(knowledgeBaseId, rel) : undefined
       decisions.push({
         ...page,
         confidence: 0.6,
@@ -266,6 +294,7 @@ export function compileDbDocument(material, ctx = {}) {
           reasons: [relationReason(rel)],
           brief: relationReviewBrief(rel),
           publish: { ...page, confidence: DB_FACT_CONFIDENCE },
+          ...(objectId ? { objectId } : {}),
         },
       })
       continue

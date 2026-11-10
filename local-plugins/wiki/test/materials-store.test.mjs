@@ -76,13 +76,26 @@ test('removing a material frees its idempotency key', async () => {
   assert.notEqual(again.id, id)
 })
 
-test('re-capturing a decided material returns the existing id and does not reopen it', async () => {
+test('re-capturing a decided material keeps the id but reopens it for compile', async () => {
   const store = createMaterialStore(deps())
   const { id } = await store.capture(input)
   await store.transition(id, 'decided', { decisionId: 'dec_1' })
   const again = await store.capture(input)
   assert.equal(again.id, id)
-  assert.equal(store.get(id).status, 'decided')
+  assert.equal(again.reopened, true)
+  assert.equal(store.get(id).status, 'captured')
+  assert.equal(store.get(id).decisionId, null)
+})
+
+test('re-capturing a failed material reopens it for compile', async () => {
+  const store = createMaterialStore(deps())
+  const { id } = await store.capture(input)
+  await store.transition(id, 'failed', { failureReason: 'compile failed' })
+  const again = await store.capture(input)
+  assert.equal(again.id, id)
+  assert.equal(again.reopened, true)
+  assert.equal(store.get(id).status, 'captured')
+  assert.equal(store.get(id).failureReason, undefined)
 })
 
 test('a changed recapture of a decided material reopens the same row', async () => {

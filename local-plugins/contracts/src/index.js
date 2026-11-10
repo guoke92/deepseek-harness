@@ -24,7 +24,26 @@ export {
 } from './memory.js'
 export { defaultPolicy, validatePolicy, validatePolicyScope, mergePolicy } from './policy.js'
 export {
-  DB_EVIDENCE_KIND, DB_FACT_CONFIDENCE, dbSlugPart, validateDbTableEvidence, dbDocumentGaps,
+  DB_EVIDENCE_KIND, DB_FACT_CONFIDENCE, dbSlugPart, primaryCommentPhrase, associationObjectId,
+  validateDbTableEvidence, dbDocumentGaps,
   renderDbTable, renderDictionary, renderRelation, relationBasis, relationReviewBrief, compileDbDocument,
 } from './db-document.js'
+export {
+  ASSERTION_STANCES, DB_EMPHASIS, stableStringify, hashStable, validateAssertion, validateAssertions,
+  buildDbAssertions,
+} from './assertions.js'
+export {
+  assertionsOf, validateAssertionKinds, CODE_ASSERTION_KINDS, DOC_ASSERTION_KINDS, DB_ASSERTION_KINDS,
+} from './derive-assertions.js'
+export {
+  RETRIEVAL_FACETS, OBJECT_KINDS, validateRetrievalHit, scoreRetrievalHit, resolveRetrievalHits,
+} from './retrieval.js'
+export { projectDbMaterial } from './project-db.js'
+export { projectDepositMaterial, isDepositMaterial } from './project-deposit.js'
+export {
+  CODE_EVIDENCE_KIND, validateCodeModuleEvidence, buildCodeAssertions, projectCodeMaterial, renderCodeModule,
+} from './project-code.js'
+export {
+  DOC_EVIDENCE_KIND, DOC_SUBTYPES, validateDocArtifactEvidence, buildDocAssertions, projectDocMaterial, renderDocArtifact,
+} from './project-doc.js'
 export { LOG_TYPES, formatLogEntry, parseLogEntry } from './log.js'

@@ -25,6 +25,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       props: SidebarPanelIconOwnerProps & { readonly id: string }
       children: { 'sidebar.panellist': { kind: 'list'; scope: 'root' } }
     }
+    /** Reuse a registered trailing mark on a panel navigation row. */
+    'sidebar.panel.accessory': {
+      scope: 'root'
+      props: SidebarPanelAccessoryOwnerProps & { readonly id: string }
+      children: { 'sidebar.panellist.accessory': { kind: 'list'; scope: 'root' } }
+    }
   }
   interface SlotMap {
     /** Non-interactive notification inside the collapsed sidebar expand button. */
@@ -45,6 +51,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * the sidebar owns the button and resolves its label from list metadata.
      */
     'sidebar.panellist': { kind: 'list'; scope: 'root'; owner: SidebarPanelIconOwnerProps }
+    /**
+     * Optional trailing status on a panel row (spinner or completion mark).
+     * Each list id addresses the matching main panel; the row places it after
+     * the label while expanded, and at the row corner while collapsed.
+     */
+    'sidebar.panellist.accessory': { kind: 'list'; scope: 'root'; owner: SidebarPanelAccessoryOwnerProps }
     /** Rows of the panel list's More menu; the sidebar shows More only while this list has registrations. */
     'sidebar.panellist.actions': { kind: 'list'; scope: 'root'; owner: SidebarPanelActionsOwnerProps }
     /**
@@ -94,6 +106,16 @@ export interface SidebarPanelIconOwnerProps {
   size: number
   /** Whether this panel is selected in the main column. */
   active: boolean
+}
+
+/** Trailing status presentation supplied by the global panel row. */
+export interface SidebarPanelAccessoryOwnerProps {
+  /** Requested square edge in pixels for the mark glyph. */
+  size: number
+  /** Whether this panel is selected in the main column. */
+  active: boolean
+  /** Whether the sidebar column shows labels beside icons. */
+  wide: boolean
 }
 
 /** Serializable metadata for one active global panel list registration. */

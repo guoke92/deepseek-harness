@@ -24,11 +24,11 @@ export const pageRecord = z.object({
 
 export const proposalRecord = z.object({
   id: z.string().min(1),
-  kind: z.enum(['delete', 'review']),
-  slug: z.string().min(1),
-  decisionId: z.string().min(1),
-  createdAt: z.string().min(1),
+  kind: z.enum(['delete', 'review', 'label', 'grounding', 'assoc', 'term_bind', 'policy', 'conflict', 'pack_gap']),
   status: z.enum(['open', 'accepted', 'rejected']),
+  decisionId: z.string().min(1).optional(),
+  createdAt: z.string().min(1).optional(),
+  slug: z.string().min(1).optional(),
   knowledgeBaseId: z.string().min(1).optional(),
 }).passthrough()
 
@@ -55,7 +55,12 @@ export const materialRecord = z.object({
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1).optional(),
   knowledgeBaseId: z.string().min(1).optional(),
-})
+  emphasis: z.string().min(1).optional(),
+  assertions: z.array(z.record(z.string(), z.unknown())).optional(),
+  structureHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+  profileHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+  refreshKind: z.enum(['profile']).optional(),
+}).passthrough()
 
 export const baseRecord = z.object({
   schemaVersion: z.literal(1),
@@ -64,6 +69,8 @@ export const baseRecord = z.object({
   description: z.string().max(300),
   datasourceIds: z.array(z.number().int().positive()),
   scopes: z.record(z.string(), z.object({ tables: z.array(z.string().min(1)) })).optional(),
+  /** 绑定的 Domain Pack id 列表，编译时按序做弱对齐。 */
+  packIds: z.array(z.string().min(1)).optional(),
   isDefault: z.boolean().optional(),
   focused: z.boolean().optional(),
   collects: z.record(z.string(), z.object({
@@ -73,7 +80,26 @@ export const baseRecord = z.object({
   })).optional(),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
-})
+}).passthrough()
+
+export const canonicalRecord = z.object({
+  id: z.string().min(1),
+  kind: z.string().min(1),
+  knowledgeBaseId: z.string().min(1),
+}).passthrough()
+
+export const retrievalRecord = z.object({
+  id: z.string().min(1),
+  facet: z.string().min(1),
+  objectKind: z.string().min(1),
+  objectId: z.string().min(1),
+  knowledgeBaseId: z.string().min(1),
+}).passthrough()
+
+export const coverageRecord = z.object({
+  knowledgeBaseId: z.string().min(1),
+  generation: z.number().int().nonnegative(),
+}).passthrough()
 
 export const wikiDomainSpec = {
   name: 'wiki',
@@ -85,5 +111,8 @@ export const wikiDomainSpec = {
     revisions: domainTable(revisionRecord),
     log: domainTable(z.string()),
     bases: domainTable(baseRecord),
+    canonical: domainTable(canonicalRecord),
+    retrieval: domainTable(retrievalRecord),
+    coverage: domainTable(coverageRecord),
   },
 }

@@ -4,7 +4,7 @@
  *
  * 决策（已确认）：工具名不加前缀。
  * 决策（暂定，待确认）：
- *   - wiki_search 默认包含草稿，并带口径标签；
+ *   - wiki_resolve 优先检索知识对象；wiki_search 默认包含草稿，并带口径标签；
  *   - deposit_confirmed 不暴露给模型（exposeToModel=false），只能由界面层调用；
  *   - execute_readonly 强制先做字面值校验，存在 rewrite 时拒绝执行。
  */
@@ -16,6 +16,16 @@ const PAGE_ID = '^[a-z_]+/[A-Za-z0-9_]+$'
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false })
 
 export const TOOL_SPECS = Object.freeze({
+  wiki_resolve: {
+    description: '按知识对象检索字段、业务说法、码值、关联、问法与口径（优先于整页搜索）。',
+    exposeToModel: true,
+    parameters: obj({
+      query: { type: 'string', minLength: 1 },
+      limit: { type: 'integer', minimum: 1, maximum: 50 },
+      includeDrafts: { type: 'boolean' },
+      facets: { type: 'array', items: { type: 'string' } },
+    }, ['query']),
+  },
   wiki_search: {
     description: '检索 wiki 页面。每条结果带口径标签：已发布口径，或草稿口径（未审核）。',
     exposeToModel: true,

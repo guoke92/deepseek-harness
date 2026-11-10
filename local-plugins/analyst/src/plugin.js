@@ -101,7 +101,17 @@ export function apply(ctx) {
     async deposit(event, meta = {}) {
       const built = toRawMaterial(event, meta)
       if (!built.ok) return built
-      const stored = await ctx.localWiki.captureAll([built.material])
+      const wiki = ctx.localWiki
+      const base = wiki.resolveBase ? await wiki.resolveBase(meta.knowledgeBaseId) : null
+      const input = base?.id ? { ...built.material, knowledgeBaseId: base.id } : built.material
+      const stored = await wiki.captureAll([input])
+      if (wiki.compile && base?.id) {
+        try {
+          await wiki.compile(base.id)
+        } catch (err) {
+          ctx.logger?.error?.(`analyst: compile after deposit failed: ${String(err?.message ?? err)}`)
+        }
+      }
       return { ok: true, id: stored.ids[0], created: stored.captured === 1 }
     },
   }
@@ -115,6 +125,16 @@ export function apply(ctx) {
       try {
         for (const message of payload?.messages ?? []) {
           const text = textOf(message).trim()
+          const labelFix = /^(?:纠正标签|字典纠正)[:：\s]*([A-Za-z_][\w]*)\.([A-Za-z_][\w]*)\s*=\s*(\S+)\s*(?:→|->|=>)\s*(.+)$/u.exec(text)
+          if (labelFix) {
+            await api.deposit({
+              kind: 'label_corrected',
+              field: `${labelFix[1]}.${labelFix[2]}`,
+              value: labelFix[3],
+              label: labelFix[4].trim(),
+            })
+            continue
+          }
           const confirmed = /^(?:确认口径|确认这个口径)[:：\s]*(.*)$/u.exec(text)
           if (!confirmed) continue
           if (confirmed[1]) {

@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto'
 import { SOURCE_TYPES, MATERIAL_STATUS } from './enums.js'
 import { checkVersion, checkEnum, finish, isIso, isInt, isObj, isStr } from './common.js'
+import { validateAssertions } from './assertions.js'
 
 export const MATERIAL_ID_RE = /^raw_[0-9A-Za-z]{6,}$/
 export const MAX_CONTENT_CHARS = 200000
@@ -47,6 +48,14 @@ export function validateMaterialInput(o) {
   else if (o.content.length > MAX_CONTENT_CHARS) e.push(`content must be at most ${MAX_CONTENT_CHARS} characters`)
   if (!isObj(o.evidence)) e.push('evidence must be an object')
   else for (const hit of findCredentialKeys(o.evidence)) e.push(`evidence must not carry credentials: ${hit}`)
+  if (o.assertions !== undefined) e.push(...validateAssertions(o.assertions).errors)
+  if (o.emphasis !== undefined && !isStr(o.emphasis)) e.push('emphasis must be a non-empty string')
+  if (o.structureHash !== undefined && (typeof o.structureHash !== 'string' || !/^[0-9a-f]{64}$/.test(o.structureHash))) {
+    e.push('structureHash must be a sha256 hex string')
+  }
+  if (o.profileHash !== undefined && (typeof o.profileHash !== 'string' || !/^[0-9a-f]{64}$/.test(o.profileHash))) {
+    e.push('profileHash must be a sha256 hex string')
+  }
   return finish(e)
 }
 
