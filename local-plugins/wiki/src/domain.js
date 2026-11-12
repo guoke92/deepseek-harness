@@ -24,6 +24,7 @@ export const pageRecord = z.object({
 
 export const proposalRecord = z.object({
   id: z.string().min(1),
+  // pack_gap 仅兼容历史行；新代码不再写入
   kind: z.enum(['delete', 'review', 'label', 'grounding', 'assoc', 'term_bind', 'policy', 'conflict', 'pack_gap']),
   status: z.enum(['open', 'accepted', 'rejected']),
   decisionId: z.string().min(1).optional(),
@@ -69,8 +70,6 @@ export const baseRecord = z.object({
   description: z.string().max(300),
   datasourceIds: z.array(z.number().int().positive()),
   scopes: z.record(z.string(), z.object({ tables: z.array(z.string().min(1)) })).optional(),
-  /** 绑定的 Domain Pack id 列表，编译时按序做弱对齐。 */
-  packIds: z.array(z.string().min(1)).optional(),
   isDefault: z.boolean().optional(),
   focused: z.boolean().optional(),
   collects: z.record(z.string(), z.object({

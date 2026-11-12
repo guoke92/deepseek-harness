@@ -1,8 +1,7 @@
 /**
  * @local/wiki Harness 入口：宿主服务 `wiki`（storage domain `wiki`）与模型工具。
- * 模型写页面的入口是 wiki_apply_decision。wiki_compile 按来源类型调用已注册的编译器。
- * 决策先过 validateDecision，再按置信度分流（高置信发布、中置信进草稿、低置信只记日志、
- * 带 review 或 delete 只生成提议）。草稿确认与提议处理不注册为模型工具。
+ * 面板采集/编译：宿主先跑 L0（含规则 extract 脚手架）或技术投影，再可选 lead 深挖/印证。
+ * Lead 工具面经 restrict 收窄。模型写页面的入口仍是 wiki_apply_decision。
  */
 import { collectTables, createWikiService } from './service.js'
 import { wikiDomainSpec } from './domain.js'
@@ -10,7 +9,10 @@ import { defaultPolicy, validateDecision } from '@local/contracts'
 import { dispatchWiki } from './panel.js'
 import { createTaskRunner } from './tasks.js'
 import { codeMaterial, docMaterial } from './ingest.js'
-import { listPacks } from './packs.js'
+import {
+  PRESET_COLLECT, PRESET_COMPILE, buildCollectPrompt, buildCompilePrompt,
+  buildDegradedResult, currentPipelineBinding, runPipelineLead,
+} from './pipeline-lead.js'
 
 export const name = 'wiki'
 export const inject = ['tools', 'storageDomain']
@@ -77,10 +79,6 @@ export function apply(ctx) {
     setScope: async (id, datasourceId, tables) => (await ready).bases.setScope(id, datasourceId, tables),
     setDefault: async (id) => (await ready).bases.setDefault(id),
     setFocus: async (id) => (await ready).bases.setFocus(id),
-    setPacks: async (id, packIds) => (await ready).bases.setPacks(id, packIds),
-    listPacks: async () => listPacks().map((pack) => ({
-      id: pack.id, version: pack.version, title: pack.title,
-    })),
     /**
      * 投递代码模块证据为粗加工原料。
      * @param {object} evidence kind=code.module
@@ -107,12 +105,15 @@ export function apply(ctx) {
     revert: async (slug, version, knowledgeBaseId) => (await ready).revert(slug, version, knowledgeBaseId),
     resolveProposal: async (id, status) => (await ready).resolveProposal(id, status),
     /**
-     * 编译该知识库中已有编译器的原料。没有编译器的来源保持 captured。
+     * 确定性技术投影。业务印证由 wiki-compile lead / wiki_corroborate_apply 完成。
      */
     async compile(knowledgeBaseId, hooks = {}) {
       const service = await ready
       const base = service.resolveBase(knowledgeBaseId)
-      return service.compile({ knowledgeBaseId: base.id, signal: hooks.signal, onItem: hooks.onItem })
+      return service.compile({
+        knowledgeBaseId: base.id,
+        signal: hooks.signal,
+      })
     },
     resolveBase: async (knowledgeBaseId) => (await ready).resolveBase(knowledgeBaseId),
     task: () => tasks.current(),
@@ -121,49 +122,88 @@ export function apply(ctx) {
     cancelTask: () => tasks.cancel(),
     startCollect(datasourceId, opts = {}) {
       const id = Number(datasourceId)
-      return tasks.start('collect', (task) => api.collect(id, {
-        ...opts,
-        signal: task.controller.signal,
-        gate: () => task.gate(),
-        onProgress: (progress) => {
-          task.phase = progress.phase
-          task.done = Number(progress.done) || 0
-          task.total = Number(progress.total) || 0
-          task.current = Number(progress.current) || 0
-          task.message = progress.message
-        },
-      }), {
+      return tasks.start('collect', async (task) => {
+        const service = await ready
+        const base = service.resolveBase(opts.knowledgeBaseId)
+        task.phase = 'l0'
+        task.message = 'L0 collect'
+        const l0 = await api.collectL0(id, {
+          ...opts,
+          knowledgeBaseId: base.id,
+          signal: task.controller.signal,
+          gate: () => task.gate(),
+          onProgress: (progress) => {
+            task.phase = progress.phase
+            task.done = Number(progress.done) || 0
+            task.total = Number(progress.total) || 0
+            task.current = Number(progress.current) || 0
+            task.message = progress.message
+          },
+        })
+        const materialIds = Array.isArray(l0.ids) ? l0.ids : []
+        task.phase = 'extract'
+        task.message = 'rule extract scaffold'
+        const scaffold = await service.scaffoldExtract(materialIds)
+        try {
+          const lead = await runPipelineLead(ctx, {
+            kind: 'collect',
+            presetId: PRESET_COLLECT,
+            knowledgeBaseId: base.id,
+            task,
+            prompt: buildCollectPrompt({
+              knowledgeBaseId: base.id,
+              datasourceId: id,
+              materialIds,
+            }),
+          })
+          return { ...lead, ...l0, scaffold }
+        } catch (err) {
+          if (err?.code === 'cancelled') throw err
+          const reason = String(err?.message ?? err)
+          ctx.logger?.warn?.(`wiki-collect lead unavailable: ${reason}; keeping L0 + scaffold`)
+          task.message = reason
+          return buildDegradedResult('collect', { ...l0, scaffold }, reason)
+        }
+      }, {
         datasourceId: Number.isInteger(id) && id > 0 ? id : undefined,
         knowledgeBaseId: opts.knowledgeBaseId,
       })
     },
     startCompile(knowledgeBaseId) {
       return tasks.start('compile', async (task) => {
-        task.phase = 'compile'
-        const result = await api.compile(knowledgeBaseId, {
+        const service = await ready
+        const base = service.resolveBase(knowledgeBaseId)
+        task.phase = 'project'
+        task.message = 'technical projection'
+        const projected = await service.projectTechnical({
+          knowledgeBaseId: base.id,
           signal: task.controller.signal,
-          onItem: async (material, index, total, meta) => {
-            await task.gate()
-            task.done = index
-            task.total = total
-            task.message = material.sourceRef
-            task.materialId = material.id
-            if (Array.isArray(meta?.runnableIds)) task.runnableIds = meta.runnableIds
-          },
         })
-        task.materialId = null
-        task.message = ''
-        task.runnableIds = null
-        if (task.total) task.done = task.total
-        return result
+        try {
+          const lead = await runPipelineLead(ctx, {
+            kind: 'compile',
+            presetId: PRESET_COMPILE,
+            knowledgeBaseId: base.id,
+            task,
+            prompt: buildCompilePrompt({ knowledgeBaseId: base.id }),
+          })
+          return { ...lead, ...projected }
+        } catch (err) {
+          if (err?.code === 'cancelled') throw err
+          const reason = String(err?.message ?? err)
+          ctx.logger?.warn?.(`wiki-compile lead unavailable: ${reason}; keeping technical projection`)
+          task.message = reason
+          await service.noteNoModel(base.id, `pipeline lead unavailable; technical projection only (${reason})`)
+          return buildDegradedResult('compile', projected, reason)
+        }
       }, { knowledgeBaseId })
     },
     /**
-     * 从数据源剖析结果追加原料。数据源插件未安装时失败，不写空原料。
+     * L0 确定性采集（无深挖）。供 lead 工具与无 agents 降级路径使用。
      * @param {number} datasourceId
-     * @param {{tables?: string[]|null, profileSampleRows?: number}} opts
+     * @param {{tables?: string[]|null, profileSampleRows?: number, knowledgeBaseId?: string}} opts
      */
-    async collect(datasourceId, opts = {}) {
+    async collectL0(datasourceId, opts = {}) {
       const datasource = typeof ctx.get === 'function' ? ctx.get('localDatasource') : undefined
       if (!datasource) throw new Error('datasource plugin is not active')
       const service = await ready
@@ -204,6 +244,10 @@ export function apply(ctx) {
         },
       }
     },
+    /** @deprecated 使用 collectL0；保留别名以免旧调用方立刻炸掉 */
+    collect(datasourceId, opts = {}) {
+      return api.collectL0(datasourceId, opts)
+    },
   }
   ctx.effect(() => ctx.provide('localWiki', api), 'wiki.provide')
 
@@ -230,6 +274,164 @@ export function apply(ctx) {
     },
   })
 
+  tool({
+    name: 'wiki_pipeline_report',
+    description: '向面板任务条报告采集/编译 lead 进度（phase、done、total、message）。',
+    properties: {
+      phase: { type: 'string', description: 'l0|extract|project|corroborate|coverage|done|done_partial 等' },
+      done: { type: 'number' },
+      total: { type: 'number' },
+      current: { type: 'number' },
+      message: { type: 'string' },
+      materialId: { type: 'string' },
+    },
+    required: ['phase'],
+    run: async (_svc, args) => {
+      const binding = currentPipelineBinding()
+      if (!binding?.task) return { ok: false, reason: 'no active pipeline task' }
+      const task = binding.task
+      task.phase = String(args.phase)
+      if (args.done != null) task.done = Number(args.done) || 0
+      if (args.total != null) task.total = Number(args.total) || 0
+      if (args.current != null) task.current = Number(args.current) || 0
+      if (args.message != null) task.message = String(args.message)
+      if (args.materialId) task.materialId = String(args.materialId)
+      await task.gate?.()
+      return { ok: true, task: tasks.current() }
+    },
+  })
+  tool({
+    name: 'wiki_pipeline_finish',
+    description: '结束当前面板采集/编译 lead 任务并提交结果。status 为 done 或 done_partial。',
+    properties: {
+      status: { type: 'string', description: 'done|done_partial' },
+      result: { type: 'object', description: '可选结果摘要' },
+      reason: { type: 'string' },
+    },
+    required: ['status'],
+    run: async (_svc, args) => {
+      const binding = currentPipelineBinding()
+      if (!binding) return { ok: false, reason: 'no active pipeline task' }
+      const payload = {
+        ok: true,
+        status: args.status === 'done' ? 'done' : 'done_partial',
+        reason: args.reason,
+        ...(args.result && typeof args.result === 'object' ? args.result : {}),
+      }
+      binding.finish(payload)
+      return payload
+    },
+  })
+  tool({
+    name: 'wiki_collect_l0',
+    description: '确定性 L0 采集：结构/画像断言入库。模型不得改写返回的断言；深挖用 extract 工具。',
+    properties: {
+      knowledgeBaseId: { type: 'string' },
+      datasourceId: { type: 'number' },
+      tables: { type: 'array', items: { type: 'string' } },
+      profileSampleRows: { type: 'number' },
+    },
+    required: ['datasourceId'],
+    run: async (_svc, args) => api.collectL0(args.datasourceId, {
+      knowledgeBaseId: args.knowledgeBaseId,
+      tables: args.tables ?? null,
+      profileSampleRows: args.profileSampleRows,
+      signal: currentPipelineBinding()?.task?.controller?.signal,
+    }),
+  })
+  tool({
+    name: 'wiki_list_pipeline_materials',
+    description: '列出知识库原料及 extractBundle 摘要，供采集/编译 lead 盘点。',
+    properties: {
+      knowledgeBaseId: { type: 'string' },
+      status: { type: 'string', description: '可选过滤 captured|decided|failed' },
+    },
+    run: async (svc, args) => {
+      const knowledgeBaseId = activeBaseId(svc, args.knowledgeBaseId)
+      return svc.materials.list()
+        .filter((item) => item.knowledgeBaseId === knowledgeBaseId)
+        .filter((item) => !args.status || item.status === args.status)
+        .map((item) => ({
+          id: item.id,
+          sourceRef: item.sourceRef,
+          sourceType: item.sourceType,
+          status: item.status,
+          sealed: Boolean(item.extractBundle?.sealed),
+          nodes: item.extractBundle?.nodes?.length ?? 0,
+          links: item.extractBundle?.links?.length ?? 0,
+          completeness: item.extractBundle?.completeness ?? null,
+        }))
+    },
+  })
+  tool({
+    name: 'wiki_evidence_brief',
+    description: '读取原料证据简报（白名单字段），作为深挖输入。',
+    properties: { materialId: { type: 'string' } },
+    required: ['materialId'],
+    run: (svc, args) => svc.evidenceBrief(args.materialId),
+  })
+  tool({
+    name: 'wiki_extract_commit',
+    description: '提交深挖增量节点/链接（契约校验）。可附 triage、completeness、roundIndex。',
+    properties: {
+      materialId: { type: 'string' },
+      nodes: { type: 'array', items: { type: 'object' } },
+      links: { type: 'array', items: { type: 'object' } },
+      triage: { type: 'object' },
+      completeness: { type: 'object' },
+      roundIndex: { type: 'number' },
+    },
+    required: ['materialId'],
+    run: (svc, args) => svc.commitExtract(args.materialId, {
+      nodes: args.nodes,
+      links: args.links,
+      triage: args.triage,
+      completeness: args.completeness,
+      roundIndex: args.roundIndex,
+    }),
+  })
+  tool({
+    name: 'wiki_extract_seal',
+    description: '封印 extractBundle。省略 completeness 时按 no_model 降级封印。',
+    properties: {
+      materialId: { type: 'string' },
+      completeness: { type: 'object' },
+    },
+    required: ['materialId'],
+    run: (svc, args) => svc.sealExtract(args.materialId, args.completeness ?? null),
+  })
+  tool({
+    name: 'wiki_project_technical',
+    description: '对 captured/failed 原料做规则页与技术对象投影（确定性，不跑模型印证）。',
+    properties: {
+      knowledgeBaseId: { type: 'string' },
+      materialId: { type: 'string', description: '可选，只投影一条' },
+    },
+    run: async (svc, args) => svc.projectTechnical({
+      knowledgeBaseId: activeBaseId(svc, args.knowledgeBaseId),
+      materialId: args.materialId,
+      signal: currentPipelineBinding()?.task?.controller?.signal,
+    }),
+  })
+  tool({
+    name: 'wiki_corroborate_apply',
+    description: '应用 CompileJudgement 数组（upsert/merge/ground/flag 等）；无锚点不得 accepted。',
+    properties: {
+      knowledgeBaseId: { type: 'string' },
+      judgements: { type: 'array', items: { type: 'object' } },
+    },
+    required: ['judgements'],
+    run: (svc, args) => svc.applyJudgements(activeBaseId(svc, args.knowledgeBaseId), args.judgements),
+  })
+  tool({
+    name: 'wiki_note_no_model',
+    description: '在 coverage 记录无模型/无法印证缺口。',
+    properties: {
+      knowledgeBaseId: { type: 'string' },
+      detail: { type: 'string' },
+    },
+    run: (svc, args) => svc.noteNoModel(activeBaseId(svc, args.knowledgeBaseId), args.detail),
+  })
   tool({
     name: 'wiki_outline',
     description: '读取当前知识库的 wiki 大纲：每页一行，含 slug、标题、类型、状态与版本。',
@@ -345,7 +547,7 @@ export function apply(ctx) {
   })
   tool({
     name: 'wiki_collect',
-    description: '从已经绑定到知识库的数据源剖析表结构与统计，并把结果追加为该知识库的原料。同一知识库里同一内容重复采集不会产生新原料。',
+    description: 'L0 采集别名（同 wiki_collect_l0）。面板采集由宿主先跑 L0；lead 只做深挖（wiki_extract_*）。',
     properties: {
       knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库，否则使用默认知识库' },
       datasourceId: { type: 'number', description: '已经绑定到该知识库的数据源 id' },
@@ -353,7 +555,7 @@ export function apply(ctx) {
       tables: { type: 'array', items: { type: 'string' }, description: '表范围，缺省全部' },
     },
     required: ['datasourceId'],
-    run: (_svc, args) => api.collect(args.datasourceId, {
+    run: (_svc, args) => api.collectL0(args.datasourceId, {
       knowledgeBaseId: args.knowledgeBaseId,
       tables: args.tables ?? null,
       profileSampleRows: args.profileSampleRows,
@@ -361,30 +563,11 @@ export function apply(ctx) {
   })
   tool({
     name: 'wiki_compile',
-    description: '把某个知识库里已有编译器的 captured 原料编译成页面、检索投影或提议。db/code/doc/sql/conversation 按已注册编译器处理；绑定的 Domain Pack 在库编译时做弱对齐。没有编译器的来源保持 captured。',
+    description: '技术投影别名（同 wiki_project_technical）。面板编译请走 wiki-compile lead；印证用 wiki_corroborate_apply。',
     properties: {
       knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库，否则使用默认知识库' },
     },
     run: (_svc, args) => api.compile(args.knowledgeBaseId),
-  })
-  tool({
-    name: 'wiki_set_packs',
-    description: '为知识库绑定 Domain Pack（按 id 列表，空数组清除）。编译时按绑定顺序弱对齐列与概念；未知 pack 立即失败。',
-    properties: {
-      knowledgeBaseId: { type: 'string', description: '知识库 id。省略时使用当前选中的知识库' },
-      packIds: { type: 'array', items: { type: 'string' }, description: 'Domain Pack id 列表，如 ["scf"]' },
-    },
-    required: ['packIds'],
-    run: async (svc, args) => {
-      const base = svc.resolveBase(args.knowledgeBaseId)
-      return api.setPacks(base.id, args.packIds)
-    },
-  })
-  tool({
-    name: 'wiki_list_packs',
-    description: '列出已注册的 Domain Pack（id、version、title）。',
-    properties: {},
-    run: () => api.listPacks(),
   })
   tool({
     name: 'wiki_ingest_code',

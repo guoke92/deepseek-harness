@@ -47,3 +47,18 @@ export {
   DOC_EVIDENCE_KIND, DOC_SUBTYPES, validateDocArtifactEvidence, buildDocAssertions, projectDocMaterial, renderDocArtifact,
 } from './project-doc.js'
 export { LOG_TYPES, formatLogEntry, parseLogEntry } from './log.js'
+export {
+  GAP_KINDS, GAP_SEVERITIES, validateCompletenessGap, validateCompletenessVerdict,
+  hasErrorGaps, isVerdictComplete, isVerdictAbstain,
+} from './completeness.js'
+export {
+  EXTRACT_SUPPORT, EXTRACT_NODE_KINDS, validateEvidenceAnchor, validateExtractNode,
+  validateExtractLink, validateExtractBundle, extractHashOf, mergeExtractDelta, countExtractAdditions,
+} from './extract-bundle.js'
+export {
+  JUDGEMENT_ACTIONS, CALIBERS, validateCompileJudgement, validateCompileJudgements,
+  validateCompileRoundOutput, businessCandidateKey, groundingId,
+} from './compile-judgement.js'
+export {
+  DEFAULT_COLLECT_MAX_ROUNDS, DEFAULT_COMPILE_MAX_ROUNDS, decideRoundStop,
+} from './round-loop.js'

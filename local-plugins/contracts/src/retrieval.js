@@ -10,6 +10,7 @@ export const RETRIEVAL_FACETS = Object.freeze([
 export const OBJECT_KINDS = Object.freeze([
   'table', 'column', 'association', 'concept', 'document_type', 'process', 'activity',
   'event_type', 'policy', 'case', 'domain', 'role', 'enum_member', 'module', 'enum', 'document', 'mapping',
+  'grounding', 'metric',
 ])
 
 /**

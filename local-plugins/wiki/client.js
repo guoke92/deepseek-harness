@@ -73,13 +73,9 @@ window.__ModuleLoader__.load({
       groupStore: '存储与数据',
       sectionInfo: '基本信息',
       sectionSources: '数据源',
-      sectionPacks: '领域 Pack',
       sectionInfoHint: '名称和说明只属于这个知识库',
       sectionSourcesHint: '采集和编译只使用这里绑定的数据源',
-      sectionPacksHint: '可选绑定 Domain Pack；默认不绑，编译时才展开先验',
       settingsLive: '数据源的绑定会立即生效',
-      packsLive: 'Pack 绑定会立即生效',
-      packNone: '暂无可用 Pack',
       needSession: '先打开一个会话，再使用知识库',
       published: '已发布',
       draft_only: '草稿',
@@ -273,13 +269,9 @@ window.__ModuleLoader__.load({
       groupStore: 'Storage',
       sectionInfo: 'Profile',
       sectionSources: 'Sources',
-      sectionPacks: 'Domain packs',
       sectionInfoHint: 'Name and description belong to this knowledge base',
       sectionSourcesHint: 'Collect and compile use only the sources bound here',
-      sectionPacksHint: 'Optionally bind domain packs; none by default, priors expand at compile',
       settingsLive: 'Source bindings apply immediately',
-      packsLive: 'Pack bindings apply immediately',
-      packNone: 'No packs available',
       needSession: 'Open a session before using Knowledge',
       published: 'Published',
       draft_only: 'Draft',
@@ -1237,8 +1229,7 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const [confirm, setConfirm] = useState(null)
       const [settingsId, setSettingsId] = useState(null)
       const [settingsSection, setSettingsSection] = useState('sources')
-      const [settingsDraft, setSettingsDraft] = useState({ name: '', description: '', packIds: [] })
-      const [availablePacks, setAvailablePacks] = useState([])
+      const [settingsDraft, setSettingsDraft] = useState({ name: '', description: '' })
       const [createSection, setCreateSection] = useState('info')
       const [menuId, setMenuId] = useState(null)
       const [browse, setBrowse] = useState('columns')
@@ -1395,12 +1386,8 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         setSettingsDraft({
           name: found.name ?? '',
           description: found.description ?? '',
-          packIds: Array.isArray(found.packIds) ? [...found.packIds] : [],
         })
         setSettingsSection('sources')
-        call(ctx, '/wiki {"op":"listPacks"}')
-          .then((result) => setAvailablePacks(Array.isArray(result?.packs) ? result.packs : []))
-          .catch(() => setAvailablePacks([]))
       }, [settingsId])
       const openPage = async (slug) => {
         setError('')
@@ -1573,7 +1560,6 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
       const studioSections = [
         { group: t('groupBasic'), id: 'info', label: t('sectionInfo'), title: t('sectionInfo'), hint: t('sectionInfoHint') },
         { group: t('groupStore'), id: 'sources', label: t('sectionSources'), title: t('sectionSources'), hint: t('sectionSourcesHint') },
-        ...(!showCreate ? [{ group: t('groupStore'), id: 'packs', label: t('sectionPacks'), title: t('sectionPacks'), hint: t('sectionPacksHint') }] : []),
       ]
       const studio = (titleId, brand, current, setCurrent, bodyNode, foot, onClose) => {
         let seen = ''
@@ -2645,33 +2631,6 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
         const scope = inherited(tables)
         return `${collect} · ${scope}`
       }
-      const packsEditor = !showCreate && editorSection === 'packs' ? h('div', { className: 'lwiki-settings-form' },
-        availablePacks.length === 0
-          ? h('p', { className: 'lwiki-empty' }, t('packNone'))
-          : availablePacks.map((pack) => {
-            const id = String(pack.id)
-            const checked = settingsDraft.packIds.includes(id)
-            return h('label', { key: id, className: 'lwiki-field', style: { flexDirection: 'row', alignItems: 'center', gap: 8 } },
-              h('input', {
-                type: 'checkbox',
-                checked,
-                onChange: () => {
-                  const next = checked
-                    ? settingsDraft.packIds.filter((item) => item !== id)
-                    : [...settingsDraft.packIds, id]
-                  setSettingsDraft({ ...settingsDraft, packIds: next })
-                  setBusy('packs')
-                  setError('')
-                  call(ctx, `/wiki ${JSON.stringify({ op: 'setPacks', id: settingsBase.id, packIds: next })}`)
-                    .then(() => { flashNotice(t('saved')); return load(baseId) })
-                    .catch(fail)
-                    .finally(() => setBusy(''))
-                },
-              }),
-              h('span', null, pack.title || id),
-            )
-          }),
-      ) : null
       const baseDialog = editorOpen ? studio(showCreate ? 'lwiki-create-title' : 'lwiki-settings-title', showCreate ? t('createTitle') : t('baseConfig'), editorSection, setEditorSection,
         editorSection === 'info' ? h('div', { className: 'lwiki-settings-form' },
           h('label', { className: 'lwiki-field' },
@@ -2690,12 +2649,12 @@ button.lwiki-step:focus-visible { outline: var(--dsw-focus-ring-width) solid var
               onChange: (event) => (showCreate ? setBaseDraft({ ...baseDraft, description: event.target.value }) : setSettingsDraft({ ...settingsDraft, description: event.target.value })),
             }),
           ),
-        ) : editorSection === 'packs' ? packsEditor : h('div', { className: 'lwiki-grid' },
+        ) : h('div', { className: 'lwiki-grid' },
           editorSources.map((row) => sourceCard(row, { meta: editorMeta(row), onOpen: () => openEdit(row) })),
           h('button', { type: 'button', className: 'lwiki-source-add', onClick: openAdd }, h(PlusIcon), h('span', null, t('addSourceCard'))),
         ),
         h(React.Fragment, null,
-          h('span', { className: 'lwiki-card-meta' }, !showCreate && editorSection === 'sources' ? t('settingsLive') : (!showCreate && editorSection === 'packs' ? t('packsLive') : '')),
+          h('span', { className: 'lwiki-card-meta' }, !showCreate && editorSection === 'sources' ? t('settingsLive') : ''),
           h('div', { className: 'lwiki-actions' },
             showCreate ? h('button', { type: 'button', className: 'lwiki-btn', onClick: () => setShowCreate(false) }, t('cancel')) : null,
             showCreate ? h('button', {

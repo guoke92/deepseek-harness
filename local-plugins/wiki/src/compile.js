@@ -1,7 +1,10 @@
 /**
- * 模型决策的 JSON 解析。数据库表不走这里，由 db 编译器根据证据生成页面。
+ * 遗留：页面 Decision 批处理的模型解析（decideMaterials / 语料回放）。
+ * 采集/编译主路径是 wiki-collect|wiki-compile lead + pipeline 工具。
  */
 import { validateDecision } from '@local/contracts'
+
+export { textFromStream } from './model-complete.js'
 
 const SYSTEM = [
   '只输出一个 JSON 数组，不要 Markdown。',
@@ -22,6 +25,7 @@ export function parseDecisions(text) {
 }
 
 /**
+ * 页面 Decision 批决策器（非 CompileJudgement；不作 wiki_compile 主路径）。
  * @param {(system: string, user: string) => Promise<string>} complete
  * @returns {(batch: object[], context: object) => Promise<object[]>}
  */
@@ -42,20 +46,4 @@ export function createModelDecider(complete) {
     if (bad) throw new Error(bad.errors.join('; '))
     return decisions
   }
-}
-
-/**
- * 读完一次模型流里的正文。
- * @param {AsyncIterable<{type: string, text?: string, reason?: string}>} stream
- * @returns {Promise<string>}
- */
-export async function textFromStream(stream) {
-  let text = ''
-  for await (const chunk of stream) {
-    if (chunk.type === 'text-delta' && chunk.text) text += chunk.text
-    if (chunk.type === 'finish' && (chunk.reason === 'error' || chunk.reason === 'aborted')) {
-      throw new Error(`model stream ${chunk.reason}`)
-    }
-  }
-  return text
 }

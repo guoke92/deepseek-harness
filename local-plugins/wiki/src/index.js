@@ -10,4 +10,16 @@ export { runDecisionBatch } from './pipeline.js'
 export { createWikiService } from './service.js'
 export { wikiDomainSpec } from './domain.js'
 export { codeMaterial, docMaterial } from './ingest.js'
-export { getPack, listPacks, registerPack, SCF_PACK } from './packs.js'
+export { buildEvidenceBrief } from './extract-rounds.js'
+export { applyCompileJudgement, putCoverageGap } from './corroborate-rounds.js'
+export { parseJsonPayload, textFromStream } from './model-complete.js'
+export {
+  commitExtractDelta, sealExtractBundle, sealNoModelExtract, projectTechnical, applyJudgements,
+} from './pipeline-ops.js'
+export {
+  buildExtractScaffoldDelta, buildScaffoldedExtractBundle, shouldSkipExtractScaffold,
+} from './extract-scaffold.js'
+export {
+  PRESET_COLLECT, PRESET_COMPILE, PIPELINE_LEAD_TOOL_ALLOW,
+  buildCollectPrompt, buildCompilePrompt, restrictPipelineLeadTools,
+} from './pipeline-lead.js'

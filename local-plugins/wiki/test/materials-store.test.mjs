@@ -110,6 +110,59 @@ test('a changed recapture of a decided material reopens the same row', async () 
   assert.equal(store.list().length, 1)
 })
 
+test('a content change clears the previous extractBundle', async () => {
+  const store = createMaterialStore(deps())
+  const { id } = await store.capture(input)
+  await store.setExtractBundle(id, {
+    schemaVersion: 1,
+    nodes: [{
+      id: 'n1', kind: 'concept', title: '旧概念', support: 'direct', confidence: 0.9,
+      evidenceAnchors: [{ ref: 't' }],
+    }],
+    links: [],
+    sealed: true,
+    completeness: { complete: true, score: 1, gaps: [] },
+  })
+  assert.ok(store.get(id).extractBundle)
+  await store.capture({ ...input, content: '结构已变', structureHash: 'a'.repeat(64), profileHash: 'b'.repeat(64) })
+  assert.equal(store.get(id).extractBundle, undefined)
+})
+
+test('identical recapture drops a no_model extractBundle but keeps a real one', async () => {
+  const store = createMaterialStore(deps())
+  const { id } = await store.capture(input)
+  await store.setExtractBundle(id, {
+    schemaVersion: 1,
+    nodes: [],
+    links: [],
+    sealed: true,
+    completeness: {
+      complete: false,
+      score: 0,
+      gaps: [{ kind: 'other', detail: 'skipped', severity: 'warning' }],
+      abstainReasons: ['no_model'],
+    },
+  })
+  await store.transition(id, 'decided', { decisionId: 'dec_1' })
+  const again = await store.capture(input)
+  assert.equal(again.reopened, true)
+  assert.equal(store.get(id).extractBundle, undefined)
+
+  await store.setExtractBundle(id, {
+    schemaVersion: 1,
+    nodes: [{
+      id: 'n1', kind: 'concept', title: '保留', support: 'direct', confidence: 0.9,
+      evidenceAnchors: [{ ref: 't' }],
+    }],
+    links: [],
+    sealed: true,
+    completeness: { complete: true, score: 1, gaps: [] },
+  })
+  await store.transition(id, 'decided', { decisionId: 'dec_2' })
+  await store.capture(input)
+  assert.equal(store.get(id).extractBundle?.nodes?.[0]?.title, '保留')
+})
+
 test('reconcile keeps the earliest id and the latest content', async () => {
   const { contentHashOf } = await import('@local/contracts')
   const table = createMemoryTable()

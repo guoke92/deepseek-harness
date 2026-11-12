@@ -56,6 +56,12 @@ export function validateMaterialInput(o) {
   if (o.profileHash !== undefined && (typeof o.profileHash !== 'string' || !/^[0-9a-f]{64}$/.test(o.profileHash))) {
     e.push('profileHash must be a sha256 hex string')
   }
+  if (o.extractBundle !== undefined) {
+    // lazy import avoided: structural check only; full validateExtractBundle at write sites
+    if (o.extractBundle === null || typeof o.extractBundle !== 'object' || Array.isArray(o.extractBundle)) {
+      e.push('extractBundle must be an object when set')
+    }
+  }
   return finish(e)
 }
 

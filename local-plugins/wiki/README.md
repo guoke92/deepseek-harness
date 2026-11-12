@@ -1,11 +1,24 @@
 # @local/wiki
 
-原料和页面是一套，以知识库为基本单位。每个知识库绑定自己的数据源，并可在绑定上勾选要采集的库；采集和编译只处理这些绑定来源。知识库没有单独范围时，采集使用数据源上的默认库表范围；数据源也没有默认范围时，采集连接默认库的全部表。知识库里的范围不写回数据源。数据分析模式的对话框可以选择当前知识库。问数只使用这个知识库绑定的数据源，SQL 停在该知识库为数据源选择的表范围内，表和字段先从该知识库的页面和原料读取。卡片可以标成默认知识库。同一知识库里，同一来源只保留一条原料；再次采集覆盖时一律 reopen 为待编译（即使正文与指纹未变，也会清掉旧的已编译/失败状态）。仅 `profileHash` 变、`structureHash` 不变时标记 `refreshKind=profile`，编译只重投影、不重写页面决策；这与采集 reopen 策略并存：采集覆盖走 reopen，profile 短路只在同次 collapse 中结构未变时生效。数据库采集写成 `db.table` 原料；列注释抽出业务说法进 `terms` → `biz_label`。编译按 `sourceType` 选择编译器：数据库编译器把证据渲染成实体页、字典页和达到阈值的关系页。字典页 slug 仍为 `concept/{table}_{column}`（迁移前同时承载码表），标题优先用列注释主短语。关系页的类型是 relation。缺列或缺注释的正文不会发布。同一原料的决策全部落地才算完成，有一条被拒绝则该原料失败，并且不留下这一次的页面和提议。不同知识库可以各有一张同名页面。未达阈值的关系生成复核提议（带稳定 `objectId`），写明要判断什么、为什么没有自动发布，以及接受和拒绝的结果。接受会写成关系页并把 canonical/retrieval 关联 caliber 升为 accepted；拒绝不改已有页面，关联保持 proposed。已经有未处理提议时不重复生成。删除知识库会级联清原料、页面、提议、投影与覆盖；启动时再清指向已不存在库的孤儿行。没有编译器的来源保持 captured。采集进度在数据源卡片上，编译进度在原料工具栏中间；进行中只保留取消（图标）。采集中/编译中时对应 Tab 显示转圈（点进该 Tab 不会清掉）；完成后数据源或原料 Tab 显示绿/红点，下游 Tab 右上角显示数量角标，点进对应 Tab 后消失。原料和 Wiki 正文按 Markdown 渲染表格。
+数据分析的 wiki：原料只追加，从数据源采集入库，页面、链接、版本与提议。
 
-知识库页用卡片列出数据源。连通是数据源上的检测结果：读过库或采集连上过显示已连通，失败显示连接失败，否则未检测。采集是这个知识库自己的过程：本库采完显示已采集，没采过显示未采集。点开卡片编辑连接和这个知识库自己的采集范围，数据源上的默认范围保持不变；菜单里可以按已保存的范围采集，或编辑范围。设置「存储与数据」可绑定 Domain Pack（显式 opt-in，默认不绑）；数据源页用同一套卡片和向导维护连接与默认范围。新增数据源到最后一步才保存。编辑时，下一步会先保存当前这一步再前进，最后一步保存并关闭。连接参数没有变化时沿用上一次的测试结果。原料和 Wiki 可以在两种视图之间切换：目录与列表分开、正文在抽屉里，或左侧目录加列表、右侧正文。失败的原料在正文顶部展示编译步骤停在哪一步以及原始失败原因。数据库原料先按数据源分目录，下面再是表、值域、连接、字典（字典叶子标题用列注释）。Wiki 按页面类型分目录，关联在「关联」下；`concept/` 在 slug 迁移前同时承载字典码表。
+面板「采集」「编译」先由宿主跑确定性段，再可选启动对等 lead preset（`wiki-collect` / `wiki-compile`）做深挖或印证：
 
-模型工具使用 `wiki_*`。`wiki_apply_decision` 要求 `evidenceRefs` 指向已经入库的原料。`wiki_collect` 在数据源插件未安装时失败。`wiki_compile` 调用已注册的编译器，不要求当前模型在线。`wiki_resolve` 检索编译投影出的字段、业务说法、码值、关联、流程、问法、口径与领域（RetrievalView），可按 `facets` 过滤，不是整页词面。`wiki_coverage` 返回覆盖缺口。数据库原料带类型化 `assertions` 与分开的 `structureHash` / `profileHash`；仅观测变化时以 `refreshKind=profile` 短路重投影。`wiki_ingest_code` / `wiki_ingest_doc` 投递代码与文档结构化证据，编译后写入检索投影（枚举、映射、API、术语、流程、场景等），不强制写 Wiki 页。已确认 SQL / 口径 / 字典纠正经沉淀编译为 Case、口径草稿或指称提议。知识库用 `wiki_set_packs` 持久绑定 Domain Pack（见 `src/packs.js`）；编译展开领域/角色/单据/流程先验，并对列、枚举与文档概念做弱对齐，未落地概念与能力问题进入覆盖清单。
+1. **采集**：宿主 `collectL0` → 规则 `extractBundle` 脚手架封印 → lead 仅深挖（失败则保留 L0+脚手架，`done_partial`）。
+2. **编译**：宿主 `projectTechnical` → lead 仅印证（失败则保留技术投影并 `noteNoModel`）。
 
-宿主服务名是 `localWiki`。
+Lead 经 `tools.restrict` 只见管道相关工具（无 datasource/MCP 等）。深挖写入 `extractBundle`，印证写入 `CompileJudgement`（不是页面 Markdown Decision）。不提供 Domain Pack 配置壳。
 
-运行测试：`node --test test/*.test.mjs`
+## 工具
+
+模型工具使用 `wiki_*`。流水线专用：
+
+| 工具 | 用途 |
+|---|---|
+| `wiki_collect_l0` | 确定性 L0（宿主主路径；面板 lead 不再调用） |
+| `wiki_evidence_brief` / `wiki_extract_commit` / `wiki_extract_seal` | 深挖 |
+| `wiki_project_technical` | 规则页 + 技术投影（宿主主路径） |
+| `wiki_corroborate_apply` / `wiki_note_no_model` | 印证 |
+| `wiki_pipeline_report` / `wiki_pipeline_finish` | 面板任务进度 |
+
+另有 `wiki_resolve`、`wiki_apply_decision`、`wiki_ingest_*` 等。宿主服务名是 `localWiki`。宿主自建 `wikiModelComplete` 多轮环与 `wiki_deep_extract` 已退役。

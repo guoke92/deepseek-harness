@@ -1,6 +1,83 @@
-# @local/wiki: materials plus pages, links, versions and proposals. Inserted after
-# the base layer so storage-domain exists. Collect calls localDatasource when present.
+# @local/wiki: host storage + two peer pipeline lead presets (collect / compile).
 - insert:
     - id: local-wiki
       name: '@local/wiki'
       config: {}
+    - id: preset-wiki-collect
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: wiki-collect
+        name: 知识采集
+        description: 总揽知识库 L0 采集与单源深挖；可委派 extract subagent。
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是知识库采集 lead（wiki-collect）。宿主已完成 L0 与规则 extract 脚手架；你只做深挖与进度收束，可委派 subagent。
+                规则：
+                1. wiki_pipeline_report(phase=extract)；禁止调用 wiki_collect_l0 / wiki_collect。
+                2. wiki_list_pipeline_materials 盘点原料；对每个 materialId：wiki_evidence_brief → 多轮 wiki_extract_commit → wiki_extract_seal。
+                3. 节点须带 evidenceAnchors；区分 direct/indirect/implicit；不要写 Wiki 页面 body。
+                4. 可用 subagent 按表并行深挖；子任务完成后你汇总进度。
+                5. 全程 wiki_pipeline_report；结束必须 wiki_pipeline_finish(status=done|done_partial)。
+                6. 无法调用模型能力时，对原料 wiki_extract_seal 省略 completeness（no_model），并以 done_partial finish。
+              complete: false
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelection: true
+    - id: preset-wiki-compile
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: wiki-compile
+        name: 知识编译
+        description: 总揽技术投影与跨源印证；可委派 corroborate subagent。
+        order: 21
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是知识库编译 lead（wiki-compile）。宿主已完成规则页与技术投影；你只做跨源印证，可委派 subagent。
+                规则：
+                1. wiki_pipeline_report(phase=corroborate)；禁止调用 wiki_project_technical / wiki_compile。
+                2. wiki_list_pipeline_materials 检查 extractBundle；缺封印时可委派补挖（wiki_extract_*），不要重跑整库 L0。
+                3. 基于多源 bundle 产出 CompileJudgement，经 wiki_corroborate_apply 写入；禁止用页面 Markdown Decision 当主产物。
+                4. 无锚点不得把 caliber 设为 accepted；冲突用 flag_coverage。
+                5. 无法印证时 wiki_note_no_model，并以 done_partial finish。
+                6. 全程 wiki_pipeline_report；结束必须 wiki_pipeline_finish(status=done|done_partial)。
+              complete: false
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelection: true

@@ -1,16 +1,15 @@
 /**
- * 精加工投影：把原料写入 canonical / retrieval / coverage。
+ * 精加工投影：把原料写入 canonical / retrieval / coverage（无 Domain Pack）。
  */
 import {
   CODE_EVIDENCE_KIND, DOC_EVIDENCE_KIND, isDepositMaterial, projectCodeMaterial, projectDbMaterial,
   projectDepositMaterial, projectDocMaterial, resolveRetrievalHits, validateRetrievalHit,
 } from '@local/contracts'
-import { alignPackToObjects, expandPackPriors, getPack } from './packs.js'
 
 /**
  * @param {{canonical: {put: Function, get: Function, entries: Function}, retrieval: {put: Function, delete: Function, entries: Function}, coverage: {put: Function, get: Function}, proposals?: {add: Function, get: Function}}} tables
  * @param {object} material
- * @param {{knowledgeBaseId: string, packId?: string|null, packIds?: string[]|null, projection?: object}} ctx
+ * @param {{knowledgeBaseId: string, projection?: object}} ctx
  */
 export async function projectMaterial(tables, material, ctx) {
   const knowledgeBaseId = ctx.knowledgeBaseId
@@ -35,33 +34,12 @@ export async function projectMaterial(tables, material, ctx) {
     throw new Error(projection.reason)
   }
 
-  let hits = [...(projection.hits ?? [])]
-  let objects = [...(projection.objects ?? [])]
-  let coverageItems = [...(projection.coverageItems ?? [])]
+  const hits = [...(projection.hits ?? [])]
+  const objects = [...(projection.objects ?? [])]
+  const coverageItems = [...(projection.coverageItems ?? [])]
 
   for (const object of objects) {
     await tables.canonical.put(object.id, object)
-  }
-
-  const packIds = resolvePackIds(ctx)
-  const packCoverageById = new Map()
-  if (packIds.length) {
-    const allObjects = [
-      ...tables.canonical.entries().map(([, row]) => row).filter((row) => row.knowledgeBaseId === knowledgeBaseId),
-    ]
-    for (const packId of packIds) {
-      const pack = getPack(packId)
-      if (!pack) continue
-      const priors = expandPackPriors(pack, knowledgeBaseId)
-      for (const object of priors.objects) await tables.canonical.put(object.id, object)
-      hits = [...hits, ...priors.hits]
-      objects = [...objects, ...priors.objects]
-      const aligned = alignPackToObjects(pack, [...allObjects, ...objects], knowledgeBaseId)
-      for (const object of aligned.objects) await tables.canonical.put(object.id, object)
-      hits = [...hits, ...aligned.hits]
-      objects = [...objects, ...aligned.objects]
-      packCoverageById.set(packId, [...priors.coverageItems, ...aligned.coverageItems])
-    }
   }
 
   await replaceObjectHits(tables, knowledgeBaseId, material.id, hits)
@@ -69,21 +47,12 @@ export async function projectMaterial(tables, material, ctx) {
     if (!tables.proposals?.get(proposal.id)) tables.proposals?.add(proposal)
   }
   await mergeCoverage(tables, knowledgeBaseId, coverageItems, material.id)
-  for (const [packId, items] of packCoverageById) {
-    await mergeCoverage(tables, knowledgeBaseId, items, `__pack__:${packId}`)
-  }
   return {
     projected: true,
     hits: hits.length,
     objects: objects.length,
     okWithoutDecisions: Boolean(projection.okWithoutDecisions),
   }
-}
-
-function resolvePackIds(ctx) {
-  if (Array.isArray(ctx.packIds) && ctx.packIds.length) return [...new Set(ctx.packIds.map(String))]
-  if (ctx.packId) return [String(ctx.packId)]
-  return []
 }
 
 async function replaceObjectHits(tables, knowledgeBaseId, materialId, hits) {

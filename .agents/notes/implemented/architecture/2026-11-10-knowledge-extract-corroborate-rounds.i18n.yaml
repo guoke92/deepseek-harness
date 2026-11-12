@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-10-knowledge-extract-corroborate-rounds.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-10-knowledge-extract-corroborate-rounds.md
+/agent-note-knowledge-extract-rounds-and-corroborate-compile:
+  en: 4ba8346a8dc4a721
+  zh: e48cdfe8ac953890
+/agent-note-knowledge-extract-rounds-and-corroborate-compile/problem:
+  en: 3adf93adfeafec62
+  zh: 22defead9f1aa8af
+/agent-note-knowledge-extract-rounds-and-corroborate-compile/decision:
+  en: 4553f4fa11733ff9
+  zh: b198ec4ca09e32df
+/agent-note-knowledge-extract-rounds-and-corroborate-compile/alternatives-considered:
+  en: c51dfc326ee6e6a4
+  zh: c78054682d468d1b
+/agent-note-knowledge-extract-rounds-and-corroborate-compile/consequences:
+  en: ccd3785be3244265
+  zh: d1c5036d5986fbfd
+/agent-note-knowledge-extract-rounds-and-corroborate-compile/required-verification:
+  en: e329163c430b3f2b
+  zh: 15810d5f3d5796f9

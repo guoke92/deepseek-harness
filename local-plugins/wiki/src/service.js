@@ -5,12 +5,16 @@ import { randomBytes } from 'node:crypto'
 import { createSerialQueue } from './queue.js'
 import { createWikiStore } from './store.js'
 import { createMaterialStore } from './materials-store.js'
-import { applyDecision, applyDecisions, promoteDraft, revertTo } from './apply.js'
+import { applyDecision, promoteDraft, revertTo } from './apply.js'
 import { graphOverview, graphExpand, deadLinks } from './links.js'
 import { runDecisionBatch } from './pipeline.js'
-import { compilerFor } from './compilers.js'
-import { projectMaterial, resolveKnowledge } from './project.js'
-import { getPack } from './packs.js'
+import { resolveKnowledge } from './project.js'
+import { buildEvidenceBrief } from './extract-rounds.js'
+import {
+  applyJudgements, commitExtractDelta, noteNoModelCoverage,
+  projectTechnical as runProjectTechnical, sealExtractBundle, sealNoModelExtract,
+} from './pipeline-ops.js'
+import { buildScaffoldedExtractBundle } from './extract-scaffold.js'
 import './db-compiler.js'
 import './deposit-compiler.js'
 import './code-compiler.js'
@@ -59,18 +63,6 @@ function normalizeScopes(value) {
     if (!/^\d+$/.test(key)) continue
     const tables = [...new Set((scope?.tables ?? []).map(String))].filter((table) => TABLE_REF.test(table))
     if (tables.length > 0) out[key] = { tables }
-  }
-  return out
-}
-
-function normalizePackIds(value) {
-  if (!Array.isArray(value)) return []
-  const out = []
-  for (const raw of value) {
-    const id = String(raw ?? '').trim()
-    if (!id || out.includes(id)) continue
-    if (!getPack(id)) throw new Error(`unknown domain pack: ${id}`)
-    out.push(id)
   }
   return out
 }
@@ -248,9 +240,6 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       .filter((id) => Number.isInteger(id) && id > 0)
     const scopes = normalizeScopes(input?.scopes ?? current?.scopes ?? {})
     const collects = normalizeCollects(input?.collects ?? current?.collects ?? {})
-    const packIds = Object.prototype.hasOwnProperty.call(input ?? {}, 'packIds')
-      ? normalizePackIds(input.packIds)
-      : normalizePackIds(current?.packIds ?? [])
     const at = now()
     const record = {
       schemaVersion: 1,
@@ -260,7 +249,6 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       datasourceIds,
       scopes,
       collects,
-      ...(packIds.length ? { packIds } : {}),
       createdAt: current?.createdAt ?? at,
       updatedAt: at,
       ...(ownFlag(input, current, 'isDefault') ? { isDefault: true } : {}),
@@ -318,106 +306,109 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       return queue.run(async () => runDecisionBatch(batch, { ...opts, env }))
     },
     /**
-     * 按来源类型编译 captured 与 failed 原料。
-     * 已注册且 supports 的原料生成页面；其余保持原状态。
-     * @param {{knowledgeBaseId?: string, signal?: AbortSignal, onItem?: Function}} [opts]
+     * 确定性技术投影（规则页 + tech/retrieval）。业务印证由 wiki-compile lead / wiki_corroborate_apply 完成。
+     * @param {{knowledgeBaseId?: string, materialId?: string, signal?: AbortSignal}} [opts]
      */
-    async compile({ knowledgeBaseId, signal, onItem, packId = null, packIds = null } = {}) {
-      const belongs = (item) => !knowledgeBaseId || item.knowledgeBaseId === knowledgeBaseId
+    async compile(opts = {}) {
+      const knowledgeBaseId = opts.knowledgeBaseId
+      const projected = await this.projectTechnical({
+        knowledgeBaseId,
+        materialId: opts.materialId,
+        signal: opts.signal,
+      })
+      const skipped = materials.list().filter((item) => (
+        (!knowledgeBaseId || item.knowledgeBaseId === knowledgeBaseId) && item.status === 'captured'
+      )).length
+      return {
+        ...projected,
+        skipped,
+        status: projected.decided ? 'complete' : 'done_partial',
+      }
+    },
+    /** 证据简报（模型深挖输入，不含旁路写库）。 */
+    evidenceBrief(materialId) {
+      const material = materials.get(materialId)
+      if (!material) throw new Error(`material ${materialId} not found`)
+      return buildEvidenceBrief(material)
+    },
+    /** 提交 extract 增量（契约校验后写入）。 */
+    commitExtract(materialId, delta) {
       return queue.run(async () => {
-        const runnable = []
-        for (const item of materials.list()) {
-          if (!belongs(item) || (item.status !== 'captured' && item.status !== 'failed')) continue
-          const compiler = compilerFor(item.sourceType)
-          if (!compiler?.supports(item)) continue
-          if (item.status === 'failed') await materials.transition(item.id, 'captured')
-          runnable.push(item.id)
-        }
-        const outcomes = []
-        let decided = 0
-        let failed = 0
-        const batchEnv = knowledgeBaseId ? { ...env, knowledgeBaseId } : env
-        const boundPackIds = (() => {
-          if (Array.isArray(packIds)) return normalizePackIds(packIds)
-          if (packId) return normalizePackIds([packId])
-          if (!knowledgeBaseId) return []
-          const base = basesTable.get(knowledgeBaseId)
-          return normalizePackIds(base?.packIds ?? [])
-        })()
-        // 先把失败原料重置为待编译，再开始逐条处理，便于界面同步状态。
-        for (let index = 0; index < runnable.length; index++) {
-          if (signal?.aborted) throw cancelledError()
-          const material = materials.get(runnable[index])
-          if (onItem) await onItem(material, index, runnable.length, { phase: 'start', runnableIds: runnable })
-          const compiler = compilerFor(material.sourceType)
-          const baseId = knowledgeBaseId || material.knowledgeBaseId
-          let compiled
-          try {
-            compiled = compiler.compile(material, {
-              knowledgeBaseId: baseId,
-              hasPage: (slug) => Boolean(store.pages.get(slug, baseId)),
-              hasOpenProposal: (slug) => store.proposals.list().some((item) => (
-                item.slug === slug && item.status === 'open' && item.kind === 'review'
-                && (!baseId || item.knowledgeBaseId === baseId)
-              )),
-            })
-          } catch (err) {
-            const reason = String(err?.message ?? err)
-            await materials.transition(material.id, 'failed', { failureReason: reason })
-            failed++
-            outcomes.push({ materialId: material.id, outcome: 'failed', reason })
+        const material = materials.get(materialId)
+        if (!material) throw new Error(`material ${materialId} not found`)
+        const { bundle, addedNodes, addedLinks } = commitExtractDelta(material, delta ?? {})
+        await materials.setExtractBundle(materialId, bundle)
+        return { materialId, addedNodes, addedLinks, nodes: bundle.nodes.length, links: bundle.links.length }
+      })
+    },
+    /** 封印 extractBundle。 */
+    sealExtract(materialId, completeness) {
+      return queue.run(async () => {
+        const material = materials.get(materialId)
+        if (!material) throw new Error(`material ${materialId} not found`)
+        const bundle = completeness
+          ? sealExtractBundle(material, completeness)
+          : sealNoModelExtract(material)
+        await materials.setExtractBundle(materialId, bundle)
+        return { materialId, sealed: true, completeness: bundle.completeness }
+      })
+    },
+    /**
+     * 对原料写入规则 extract 脚手架并封印（跳过已有非 no_model 封印）。
+     * @param {string[]} materialIds
+     */
+    scaffoldExtract(materialIds) {
+      return queue.run(async () => {
+        const sealed = []
+        const skipped = []
+        for (const id of materialIds ?? []) {
+          const material = materials.get(id)
+          if (!material) continue
+          const bundle = buildScaffoldedExtractBundle(material)
+          if (!bundle) {
+            skipped.push(id)
             continue
           }
-          const decisions = Array.isArray(compiled) ? compiled : compiled?.decisions
-          const okWithoutDecisions = !Array.isArray(compiled) && compiled?.okWithoutDecisions === true
-          if (!decisions?.length && !okWithoutDecisions) {
-            const reason = 'compiler returned no decisions'
-            await materials.transition(material.id, 'failed', { failureReason: reason })
-            failed++
-            outcomes.push({ materialId: material.id, outcome: 'failed', reason })
-            continue
-          }
-          if (decisions?.length) {
-            const stamped = decisions.map((decision) => ({
-              ...decision,
-              evidenceRefs: decision.evidenceRefs?.length ? decision.evidenceRefs : [material.id],
-            }))
-            const batch = applyDecisions(stamped, {
-              ...batchEnv,
-              knowledgeBaseId: baseId,
-              decisionId: `dec_${material.id}`,
-              source: 'pipeline',
-            })
-            if (batch.rejected) {
-              await materials.transition(material.id, 'failed', { failureReason: batch.rejected.reason })
-              failed++
-              outcomes.push({ materialId: material.id, outcome: 'failed', reason: batch.rejected.reason, applied: batch.applied })
-              continue
-            }
-            outcomes.push({ materialId: material.id, outcome: 'decided', applied: batch.applied })
-          } else {
-            outcomes.push({ materialId: material.id, outcome: 'decided', applied: [], projectedOnly: true })
-          }
-          if (baseId) {
-            try {
-              await projectMaterial(projectTables, material, {
-                knowledgeBaseId: baseId,
-                packIds: boundPackIds,
-                projection: !Array.isArray(compiled) ? compiled?.projection : undefined,
-              })
-            } catch (err) {
-              const reason = `project failed: ${String(err?.message ?? err)}`
-              await materials.transition(material.id, 'failed', { failureReason: reason })
-              failed++
-              outcomes[outcomes.length - 1] = { materialId: material.id, outcome: 'failed', reason }
-              continue
-            }
-          }
-          await materials.transition(material.id, 'decided', { decisionId: `dec_${material.id}` })
-          decided++
+          await materials.setExtractBundle(id, bundle)
+          sealed.push(id)
         }
-        const skipped = materials.list().filter((item) => belongs(item) && item.status === 'captured').length
-        return { decided, failed, skipped, outcomes, packIds: boundPackIds }
+        return { sealed, skipped }
+      })
+    },
+    /**
+     * 仅规则页 + 技术投影（编译 lead 的确定性段）。
+     * @param {{knowledgeBaseId: string, materialId?: string, signal?: AbortSignal}} opts
+     */
+    projectTechnical(opts) {
+      return queue.run(async () => runProjectTechnical({
+        materials,
+        projectTables,
+        page: (slug, knowledgeBaseId) => store.pages.get(slug, knowledgeBaseId) ?? null,
+        proposals: (knowledgeBaseId) => scoped(store.proposals.list(), knowledgeBaseId),
+        env,
+      }, opts))
+    },
+    /**
+     * 应用 CompileJudgement 列表（契约拒写）。
+     * @param {string} knowledgeBaseId
+     * @param {object[]} judgements
+     */
+    applyJudgements(knowledgeBaseId, judgements) {
+      return queue.run(async () => applyJudgements(projectTables, knowledgeBaseId, judgements))
+    },
+    /**
+     * 记录无模型覆盖缺口。
+     * @param {string} knowledgeBaseId
+     * @param {string} [detail]
+     */
+    noteNoModel(knowledgeBaseId, detail) {
+      return queue.run(async () => {
+        await noteNoModelCoverage(
+          projectTables,
+          knowledgeBaseId,
+          detail || 'model unavailable; technical projection only',
+        )
+        return { ok: true }
       })
     },
     promote(slug, knowledgeBaseId) {
@@ -552,16 +543,6 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
       }),
       setDefault: (id) => queue.run(() => replaceFlag(id, 'isDefault')),
       setFocus: (id) => queue.run(() => replaceFlag(id, 'focused')),
-      /**
-       * 绑定 Domain Pack。空数组清除绑定。未知 id 立即失败。
-       * @param {string} id
-       * @param {string[]} packIds
-       */
-      setPacks: (id, packIds) => queue.run(async () => {
-        const current = basesTable.get(id)
-        if (!current) throw new Error(`knowledge base ${id} not found`)
-        return putBase({ packIds }, current)
-      }),
       noteCollect: (id, datasourceId, status) => queue.run(async () => {
         const current = basesTable.get(id)
         if (!current) throw new Error(`knowledge base ${id} not found`)
@@ -620,10 +601,4 @@ export function createWikiService({ domain, now = () => new Date().toISOString()
     /** 启动时清理指向已删除知识库的附属行。 */
     reconcileOrphans: () => queue.run(() => reconcileOrphans()),
   }
-}
-
-function cancelledError() {
-  const error = new Error('cancelled')
-  error.code = 'cancelled'
-  return error
 }

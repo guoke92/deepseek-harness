@@ -116,5 +116,6 @@ function snapshot(task) {
     ...(Array.isArray(task.runnableIds) ? { runnableIds: task.runnableIds } : {}),
     ...(Number.isInteger(task.datasourceId) ? { datasourceId: task.datasourceId } : {}),
     ...(typeof task.knowledgeBaseId === 'string' && task.knowledgeBaseId ? { knowledgeBaseId: task.knowledgeBaseId } : {}),
+    ...(typeof task.sessionId === 'string' && task.sessionId ? { sessionId: task.sessionId } : {}),
   }
 }

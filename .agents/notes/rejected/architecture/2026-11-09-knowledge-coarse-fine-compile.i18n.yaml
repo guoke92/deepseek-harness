@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for 2026-11-09-knowledge-coarse-fine-compile.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/rejected/architecture/2026-11-09-knowledge-coarse-fine-compile.md
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile:
+  en: beb3b366221b6125
+  zh: a91e6b559c40b0e3
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/problem:
+  en: b4fddacea19809fb
+  zh: e1afe6973813540a
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/proposal:
+  en: bb911a096bfe0db4
+  zh: aa091d1a7d3f23d1
+/agent-note-coarse-materials-and-fine-multi-source-knowledge-compile/alternatives-considered:
+  en: 5dcb3b7080a5cc21
+  zh: 897cf64ed50118ce

@@ -6,4 +6,6 @@
 
 类型化断言与双指纹（`buildDbAssertions` / `buildCodeAssertions` / `buildDocAssertions` / `assertionsOf`）、检索命中与 `resolveRetrievalHits`、以及 db/code/doc/沉淀投影纯函数也在这里，供粗加工与精加工共用。
 
+采集深挖与编译印证合同也在这里：`CompletenessVerdict`、`ExtractBundle`、`CompileJudgement`、以及 `decideRoundStop` 多轮收束判定。禁止以页面 Markdown body 作为编译判决主字段；不包含 Domain Pack 实例。
+
 运行测试：`node --test test/*.test.mjs`

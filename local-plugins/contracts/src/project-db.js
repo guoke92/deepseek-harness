@@ -138,27 +138,17 @@ export function projectDbMaterial(material, ctx) {
     })
   }
 
+  // 列注释说法只进检索分面，不自动升格为业务 Concept（由深挖/印证授身份）
   for (const term of assertions.filter((item) => item.kind === 'termHint')) {
     const { term: label, column } = term.payload
     const text = String(label ?? '').trim()
     if (!text) continue
-    const conceptId = `biz_cpt:${knowledgeBaseId}:${dbSlugPart(text)}`
-    objects.push({
-      id: conceptId,
-      kind: 'concept',
-      knowledgeBaseId,
-      identity: { preferred: text },
-      title: text,
-      evidenceIds: [evidenceId],
-      caliber: 'proposed',
-      packRef: null,
-    })
     const columnId = `tech_col:${knowledgeBaseId}:${table}.${column}`
     hits.push({
-      id: `hit:${conceptId}:${column}`,
+      id: `hit:term:${knowledgeBaseId}:${table}.${column}:${dbSlugPart(text)}`,
       facet: 'biz_label',
-      objectKind: 'concept',
-      objectId: conceptId,
+      objectKind: 'column',
+      objectId: columnId,
       score: 0,
       display: text,
       aliases: [column, `${table}.${column}`],
@@ -166,7 +156,7 @@ export function projectDbMaterial(material, ctx) {
       evidenceIds: [evidenceId],
       caliber: 'proposed',
       knowledgeBaseId,
-      neighbors: [{ objectId: columnId, rel: 'grounding' }],
+      neighbors: [{ objectId: columnId, rel: 'label_of' }],
     })
   }
 

@@ -32,7 +32,11 @@ export function primaryCommentPhrase(comment, columnName = '') {
 }
 
 export const DB_EVIDENCE_KIND = 'db.table'
-export const DB_FACT_CONFIDENCE = 0.95
+/**
+ * 规则技术投影置信度：等于宿主 autoPublishThreshold（0.85），仍自动发布，
+ * 但低于原先 0.95，便于与模型印证 accepted 区分。
+ */
+export const DB_FACT_CONFIDENCE = 0.85
 
 const ROLES = ['identifier', 'time', 'measure', 'enum', 'text', 'large', 'masked']
 const ROLE_LABEL = {
@@ -123,8 +127,13 @@ export function dbDocumentGaps(body, evidence) {
  */
 export function renderDbTable(evidence) {
   const slugs = pageSlugs(evidence)
-  const lines = [`# ${evidence.table}`, '']
-  if (evidence.comment) lines.push(evidence.comment, '')
+  const title = String(evidence.comment || '').trim() || evidence.table
+  const lines = [`# ${title}`, '']
+  if (evidence.comment && evidence.comment !== evidence.table) {
+    lines.push(`表名：${evidence.table}`, '')
+  } else if (!evidence.comment) {
+    /* title already the table name */
+  }
   lines.push(`表总行数 ${evidence.rowCount}。`)
   const mode = SAMPLE_LABEL[evidence.sampleMode] ?? evidence.sampleMode
   const sampled = evidence.sampleRows ?? 0

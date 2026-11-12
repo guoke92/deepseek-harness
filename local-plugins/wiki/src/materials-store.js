@@ -9,8 +9,8 @@
  */
 import { randomBytes } from 'node:crypto'
 import {
-  contentHashOf, materialIdempotencyKey, validateMaterialInput, validateMaterialTransition,
-  validateRawMaterial, SCHEMA_VERSION,
+  contentHashOf, materialIdempotencyKey, validateExtractBundle, validateMaterialInput,
+  validateMaterialTransition, validateRawMaterial, SCHEMA_VERSION,
 } from '@local/contracts'
 import { createSerialQueue } from './queue.js'
 
@@ -57,7 +57,7 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
     const changed = contentHash !== canonical.contentHash || structureChanged || profileOnly
     if (changed) {
       const next = await table.update(canonical.id, (cur) => {
-        const { failureReason: _drop, refreshKind: _refresh, ...rest } = cur
+        const { failureReason: _drop, refreshKind: _refresh, extractBundle: _bundle, ...rest } = cur
         const out = {
           ...rest,
           content: fresh.content,
@@ -73,6 +73,7 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
         if (fresh.structureHash) out.structureHash = fresh.structureHash
         if (fresh.profileHash) out.profileHash = fresh.profileHash
         if (profileOnly && !structureChanged) out.refreshKind = 'profile'
+        // 证据变了则作废旧深挖；由后续 wiki_extract_* / lead 重写
         return out
       })
       const checked = validateRawMaterial(next)
@@ -110,8 +111,21 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
         const existing = rows[0]
         if (existing.status === 'captured') return { id: existing.id, created: false }
         // 采集再次覆盖：即使正文未变，也清掉旧编译结果，回到待编译。
+        // 保留非 no_model 的 extractBundle：L0 指纹未变时可跳过重挖。
+        // no_model 降级封印在下次采集时作废，便于模型接线后重挖。
         const next = await table.update(existing.id, (cur) => {
           const { failureReason: _drop, refreshKind: _refresh, ...rest } = cur
+          const noModel = Array.isArray(cur.extractBundle?.completeness?.abstainReasons)
+            && cur.extractBundle.completeness.abstainReasons.includes('no_model')
+          if (noModel) {
+            const { extractBundle: _bundle, ...without } = rest
+            return {
+              ...without,
+              status: 'captured',
+              decisionId: null,
+              updatedAt: now(),
+            }
+          }
           return {
             ...rest,
             status: 'captured',
@@ -221,11 +235,30 @@ export function createMaterialStore({ table, now = () => new Date().toISOString(
     })
   }
 
+  /**
+   * 写入采集深挖 ExtractBundle（不改变 status）。
+   * @param {string} id
+   * @param {object} extractBundle
+   */
+  function setExtractBundle(id, extractBundle) {
+    return queue.run(async () => {
+      const current = table.get(id)
+      if (!current) throw new Error(`material ${id} not found`)
+      const checked = validateExtractBundle(extractBundle)
+      if (!checked.ok) throw new Error(`extractBundle invalid: ${checked.errors.join('; ')}`)
+      const next = await table.update(id, (cur) => ({ ...cur, extractBundle, updatedAt: now() }))
+      const ok = validateRawMaterial(next)
+      if (!ok.ok) throw new Error(`material record invalid: ${ok.errors.join('; ')}`)
+      return next
+    })
+  }
+
   return {
     capture,
     transition,
     assignBase,
     reconcile,
+    setExtractBundle,
     /**
      * 删除一条原料，并放开它的幂等键。
      * @param {string} id

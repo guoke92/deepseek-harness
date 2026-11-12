@@ -43,7 +43,6 @@ function evidence(rowCount = 2) {
 test('compile projects retrieval hits and resolve finds fields and terms', async () => {
   const svc = createWikiService({ domain: domain() })
   const base = await svc.bases.create({ name: '演示库', description: '', datasourceIds: [1] })
-  await svc.bases.setPacks(base.id, ['scf'])
   const built = buildDbAssertions(evidence(2))
   await svc.materials.capture({
     sourceType: 'db',
@@ -56,16 +55,14 @@ test('compile projects retrieval hits and resolve finds fields and terms', async
   })
   const result = await svc.compile({ knowledgeBaseId: base.id })
   assert.equal(result.decided, 1)
-  assert.deepEqual(result.packIds, ['scf'])
+  assert.equal(result.status, 'complete')
   assert.equal(svc.page('entity/ca_fee_order', base.id).status, 'published')
-  assert.deepEqual(svc.bases.get(base.id).packIds, ['scf'])
   const resolved = svc.resolve('订单状态', { knowledgeBaseId: base.id })
   assert.ok(resolved.hits.length >= 1)
   assert.ok(resolved.hits.some((hit) => hit.facet === 'biz_label' || hit.display.includes('order_status')))
   assert.ok(resolved.generation >= 1)
   const cov = svc.coverage(base.id)
   assert.equal(cov.knowledgeBaseId, base.id)
-  assert.ok((cov.items ?? []).some((item) => item.severity === 'pack_gap' || item.ref.includes('pack:scf')))
 })
 
 test('code material compiles into enum and mapping retrieval hits', async () => {
@@ -118,26 +115,53 @@ test('doc material compiles glossary terms into proposed concepts', async () => 
   assert.ok((cov.items ?? []).some((item) => item.severity === 'term_proposed'))
 })
 
-test('bound pack expands domains and aligns doc concepts', async () => {
+test('extract tools then projectTechnical then corroborate_apply promote concepts', async () => {
   const svc = createWikiService({ domain: domain() })
-  const base = await svc.bases.create({ name: '演示库', description: '' })
-  await svc.bases.setPacks(base.id, ['scf'])
-  const material = docMaterial({
-    kind: 'doc.artifact',
-    title: '术语',
-    docUri: 'docs/g.md',
-    subtype: 'glossary',
-    definitions: [{ term: '确权', aliases: ['资产确权'], text: '确认应付' }],
-  }, { knowledgeBaseId: base.id })
-  await svc.materials.capture(material)
-  await svc.compile({ knowledgeBaseId: base.id })
-  assert.ok(svc.listCanonical(base.id).some((row) => row.kind === 'domain' && row.title === '确权'))
-  assert.ok(svc.resolve('确权', { knowledgeBaseId: base.id, facets: ['domain', 'biz_label'] }).hits.length >= 1)
-  const cov = svc.coverage(base.id)
-  assert.ok((cov.items ?? []).some((item) => item.severity === 'pack_cq'))
-  assert.ok(svc.resolve('确权', { knowledgeBaseId: base.id }).hits.some((hit) => (
-    hit.objectKind === 'concept' && (hit.neighbors ?? []).some((n) => n.rel === 'same_as')
-  )))
+  const base = await svc.bases.create({ name: '演示库', description: '', datasourceIds: [1] })
+  const built = buildDbAssertions(evidence(2))
+  const captured = await svc.materials.capture({
+    sourceType: 'db',
+    sourceRef: 'db:ds1/ca_fee_order',
+    datasourceId: 1,
+    knowledgeBaseId: base.id,
+    content: '表文档',
+    evidence: evidence(2),
+    ...built,
+  })
+  await svc.commitExtract(captured.id, {
+    nodes: [{
+      id: 'ext_order_status',
+      kind: 'concept',
+      title: '订单状态',
+      support: 'direct',
+      confidence: 0.9,
+      evidenceAnchors: [{ assertionKey: 'column:order_status', materialId: captured.id }],
+    }],
+    links: [{
+      id: 'lnk_1',
+      fromRef: 'ext_order_status',
+      toRef: 'tech_col',
+      predicate: 'grounds',
+      support: 'direct',
+      confidence: 0.8,
+      evidenceAnchors: [{ assertionKey: 'column:order_status' }],
+    }],
+  })
+  await svc.sealExtract(captured.id, { complete: true, score: 0.95, gaps: [] })
+  const material = svc.materials.get(captured.id)
+  assert.equal(material.extractBundle.sealed, true)
+  assert.ok(material.extractBundle.nodes.some((node) => node.title === '订单状态'))
+
+  const result = await svc.compile({ knowledgeBaseId: base.id })
+  assert.equal(result.decided, 1)
+  const applied = await svc.applyJudgements(base.id, [{
+    action: 'upsert_canonical',
+    confidence: 0.9,
+    evidenceAnchors: [{ assertionKey: 'column:order_status', materialId: captured.id }],
+    object: { kind: 'concept', title: '订单状态', support: 'direct' },
+  }])
+  assert.equal(applied.applied, 1)
+  assert.ok(svc.listCanonical(base.id).some((row) => row.kind === 'concept' && row.title === '订单状态'))
 })
 
 test('label deposit compiles into a proposed value hit and open proposal', async () => {
